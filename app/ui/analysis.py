@@ -349,12 +349,24 @@ class AnalysisPage(QWidget):
                 else "Blocked"
             )
 
+        sun_mission_visible = (
+            sun["terrain_visible"]
+            if sun.get("terrain_visible") is not None
+            else sun["visible"]
+        )
+
+        earth_mission_visible = (
+            earth["terrain_visible"]
+            if earth.get("terrain_visible") is not None
+            else earth["visible"]
+        )
+
         self.sun_visibility.setText(
-            "Visible" if sun["visible"] else "Not Visible"
+            "Visible" if sun_mission_visible else "Blocked by Terrain"
         )
 
         self.earth_visibility.setText(
-            "Visible" if earth["visible"] else "Not Visible"
+            "Visible" if earth_mission_visible else "Blocked by Terrain"
         )
 
         self.status_label.setText(

@@ -24,6 +24,13 @@ class CelestialResult:
     terrain_visible: bool | None = None
     terrain_status: str | None = None
 
+    @property
+    def mission_visible(self) -> bool:
+        """User-facing visibility: prefer terrain-aware visibility when available."""
+        if self.terrain_visible is not None:
+            return self.terrain_visible
+        return self.visible
+
 
 @dataclass
 class AnalysisResult:

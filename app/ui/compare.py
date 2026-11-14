@@ -384,7 +384,11 @@ Elevation: {result.sun.elevation:.2f}°
 
 Azimuth: {result.sun.azimuth:.2f}°
 
-Visibility: {result.sun.status}
+Visibility: {
+    "Visible"
+    if result.sun.mission_visible
+    else "Blocked by Terrain"
+}
 
 <b>Earth</b>
 
@@ -392,5 +396,9 @@ Elevation: {result.earth.elevation:.2f}°
 
 Azimuth: {result.earth.azimuth:.2f}°
 
-Visibility: {result.earth.status}
+Visibility: {
+    "Visible"
+    if result.earth.mission_visible
+    else "Blocked by Terrain"
+}
 """

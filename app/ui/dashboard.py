@@ -903,7 +903,7 @@ class Dashboard(QWidget):
 
         self.sun_card.detail.setText(
             f"Azimuth {result.sun.azimuth:.2f}° • "
-            f"{result.sun.status}"
+            f"{'Visible' if result.sun.mission_visible else 'Blocked by Terrain'}"
         )
 
         self.earth_card.value.setText(
@@ -912,7 +912,7 @@ class Dashboard(QWidget):
 
         self.earth_card.detail.setText(
             f"Azimuth {result.earth.azimuth:.2f}° • "
-            f"{result.earth.status}"
+            f"{'Visible' if result.earth.mission_visible else 'Blocked by Terrain'}"
         )
 
         self.time_card.value.setText(
@@ -929,26 +929,26 @@ class Dashboard(QWidget):
 
         self.visibility_label.setText(
             "Sun: "
-            f"{result.sun.status} "
+            f"{'Visible' if result.sun.mission_visible else 'Blocked by Terrain'} "
             f"({result.sun.elevation:.2f}° elevation, "
             f"{result.sun.azimuth:.2f}° azimuth)\n"
             "Earth: "
-            f"{result.earth.status} "
+            f"{'Visible' if result.earth.mission_visible else 'Blocked by Terrain'} "
             f"({result.earth.elevation:.2f}° elevation, "
             f"{result.earth.azimuth:.2f}° azimuth)"
         )
 
         if (
-            result.sun.visible
-            and result.earth.visible
+            result.sun.mission_visible
+            and result.earth.mission_visible
         ):
             decision = "GO — SUN + EARTH VISIBLE"
-        elif result.sun.visible:
-            decision = "LIMITED — SUN VISIBLE / EARTH BELOW HORIZON"
-        elif result.earth.visible:
-            decision = "LIMITED — EARTH VISIBLE / SUN BELOW HORIZON"
+        elif result.sun.mission_visible:
+            decision = "LIMITED — SUN VISIBLE / EARTH BLOCKED BY TERRAIN"
+        elif result.earth.mission_visible:
+            decision = "LIMITED — EARTH VISIBLE / SUN BLOCKED BY TERRAIN"
         else:
-            decision = "NO-GO — SUN + EARTH BELOW HORIZON"
+            decision = "NO-GO — SUN + EARTH BLOCKED BY TERRAIN"
 
         self.decision_label.setText(
             decision
@@ -957,8 +957,8 @@ class Dashboard(QWidget):
         self.result_label.setText(
             "Analysis completed for "
             f"{result.site.name}. "
-            "Results use the current spherical lunar-horizon "
-            "geometry model with NASA SPICE ephemerides."
+            "Visibility uses NASA SPICE ephemerides "
+            "and terrain-aware LOLA horizon data where available."
         )
 
     # =============================================================
@@ -1047,14 +1047,14 @@ class Dashboard(QWidget):
 
             row[5].setText(
                 "Visible"
-                if result.sun.visible
-                else "Below Horizon"
+                if result.sun.mission_visible
+                else "Blocked by Terrain"
             )
 
             row[6].setText(
                 "Visible"
-                if result.earth.visible
-                else "Below Horizon"
+                if result.earth.mission_visible
+                else "Blocked by Terrain"
             )
 
     # =============================================================
