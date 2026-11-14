@@ -24,7 +24,19 @@ class ComparePage(QWidget):
         self.engine = LunarAnalysisEngine()
         self.engine.load()
 
+        # Dashboard-selected UTC analysis time.
+        # None means Compare may use the current UTC time as a fallback.
+        self.analysis_time = None
+
         self.setup_ui()
+
+    def set_analysis_time(self, analysis_time):
+        """Set the UTC timestamp used for all site comparisons."""
+        self.analysis_time = analysis_time
+
+        # Refresh only when the page is already initialized.
+        if hasattr(self, "site_a_combo") and hasattr(self, "site_b_combo"):
+            self.update_comparison()
 
     def setup_ui(self):
 
@@ -275,11 +287,24 @@ class ComparePage(QWidget):
             site_b_name
         ]
 
-        analysis_time = datetime.now(
-            timezone.utc
-        ).replace(
-            tzinfo=None
-        )
+        if self.analysis_time is None:
+            analysis_time = datetime.now(
+                timezone.utc
+            ).replace(
+                tzinfo=None
+            )
+        else:
+            analysis_time = self.analysis_time
+
+            # LunarAnalysisEngine expects a UTC datetime.
+            # Keep the timestamp explicitly UTC and remove timezone
+            # information only if the supplied value is timezone-aware.
+            if analysis_time.tzinfo is not None:
+                analysis_time = analysis_time.astimezone(
+                    timezone.utc
+                ).replace(
+                    tzinfo=None
+                )
 
         try:
 

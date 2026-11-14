@@ -855,12 +855,24 @@ class Dashboard(QWidget):
                 "azimuth": result.sun.azimuth,
                 "visible": result.sun.visible,
                 "status": result.sun.status,
+                "terrain_horizon_elevation":
+                    result.sun.terrain_horizon_elevation,
+                "terrain_visible":
+                    result.sun.terrain_visible,
+                "terrain_status":
+                    result.sun.terrain_status,
             },
             "earth": {
                 "elevation": result.earth.elevation,
                 "azimuth": result.earth.azimuth,
                 "visible": result.earth.visible,
                 "status": result.earth.status,
+                "terrain_horizon_elevation":
+                    result.earth.terrain_horizon_elevation,
+                "terrain_visible":
+                    result.earth.terrain_visible,
+                "terrain_status":
+                    result.earth.terrain_status,
             },
         }
 

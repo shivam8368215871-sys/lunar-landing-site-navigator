@@ -90,7 +90,7 @@ class MainWindow(QMainWindow):
         )
 
         self.compare_button.clicked.connect(
-            lambda: self.pages.setCurrentIndex(3)
+            self.show_compare_page
         )
 
         self.settings_button.clicked.connect(
@@ -102,10 +102,20 @@ class MainWindow(QMainWindow):
             self.show_analysis_results
         )
 
-                # Sites → Dashboard
+        # Sites → Dashboard
         self.sites_page.site_changed.connect(
             self.dashboard_page.set_location
         )
+
+    def show_compare_page(self):
+        """Open Compare using the Dashboard's latest analysis timestamp."""
+
+        if self.dashboard_page.last_analysis is not None:
+            self.compare_page.set_analysis_time(
+                self.dashboard_page.last_analysis.time
+            )
+
+        self.pages.setCurrentIndex(3)
 
     def show_analysis_results(self, results):
 

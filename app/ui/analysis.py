@@ -81,6 +81,26 @@ class AnalysisPage(QWidget):
             self.sun_status, 2, 1
         )
 
+        sun_layout.addWidget(
+            QLabel("Terrain Horizon:"), 3, 0
+        )
+
+        self.sun_terrain_horizon = QLabel("--")
+
+        sun_layout.addWidget(
+            self.sun_terrain_horizon, 3, 1
+        )
+
+        sun_layout.addWidget(
+            QLabel("Terrain Visibility:"), 4, 0
+        )
+
+        self.sun_terrain_visibility = QLabel("--")
+
+        sun_layout.addWidget(
+            self.sun_terrain_visibility, 4, 1
+        )
+
         sun_group.setLayout(sun_layout)
 
         # --------------------------------------------------
@@ -119,6 +139,26 @@ class AnalysisPage(QWidget):
 
         earth_layout.addWidget(
             self.earth_status, 2, 1
+        )
+
+        earth_layout.addWidget(
+            QLabel("Terrain Horizon:"), 3, 0
+        )
+
+        self.earth_terrain_horizon = QLabel("--")
+
+        earth_layout.addWidget(
+            self.earth_terrain_horizon, 3, 1
+        )
+
+        earth_layout.addWidget(
+            QLabel("Terrain Visibility:"), 4, 0
+        )
+
+        self.earth_terrain_visibility = QLabel("--")
+
+        earth_layout.addWidget(
+            self.earth_terrain_visibility, 4, 1
         )
 
         earth_group.setLayout(earth_layout)
@@ -252,6 +292,62 @@ class AnalysisPage(QWidget):
         self.earth_status.setText(
             earth["status"]
         )
+
+        sun_horizon = sun.get(
+            "terrain_horizon_elevation"
+        )
+
+        if sun_horizon is None:
+            self.sun_terrain_horizon.setText(
+                "Unavailable"
+            )
+        else:
+            self.sun_terrain_horizon.setText(
+                f'{sun_horizon:.3f}°'
+            )
+
+        sun_terrain_visible = sun.get(
+            "terrain_visible"
+        )
+
+        if sun_terrain_visible is None:
+            self.sun_terrain_visibility.setText(
+                "Unavailable"
+            )
+        else:
+            self.sun_terrain_visibility.setText(
+                "Visible"
+                if sun_terrain_visible
+                else "Blocked"
+            )
+
+        earth_horizon = earth.get(
+            "terrain_horizon_elevation"
+        )
+
+        if earth_horizon is None:
+            self.earth_terrain_horizon.setText(
+                "Unavailable"
+            )
+        else:
+            self.earth_terrain_horizon.setText(
+                f'{earth_horizon:.3f}°'
+            )
+
+        earth_terrain_visible = earth.get(
+            "terrain_visible"
+        )
+
+        if earth_terrain_visible is None:
+            self.earth_terrain_visibility.setText(
+                "Unavailable"
+            )
+        else:
+            self.earth_terrain_visibility.setText(
+                "Visible"
+                if earth_terrain_visible
+                else "Blocked"
+            )
 
         self.sun_visibility.setText(
             "Visible" if sun["visible"] else "Not Visible"
