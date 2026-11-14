@@ -1,4 +1,5 @@
-from PySide6.QtCore import QDate, QTime
+
+from PySide6.QtCore import QDate, QTime, Signal
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -14,6 +15,8 @@ from PySide6.QtWidgets import (
 
 
 class Dashboard(QWidget):
+
+    analysis_completed = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -233,17 +236,74 @@ class Dashboard(QWidget):
 
     def run_analysis(self):
 
-        site = self.site_combo.currentText()
+        site_name = self.site_combo.currentText()
 
-        self.sun_elevation.setText("12.4°")
-        self.sun_azimuth.setText("180.0°")
+        # Temporary/mock analysis values.
+        # These will later come from the scientific engine.
 
-        self.earth_elevation.setText("8.2°")
-        self.earth_azimuth.setText("95.0°")
+        results = {
+            "site": {
+                "name": site_name,
+                "latitude": -89.90,
+                "longitude": 0.00,
+            },
 
-        self.sun_visibility.setText("Visible")
-        self.earth_visibility.setText("Visible")
+            "time": {
+                "date": self.date_edit.date().toString(
+                    "yyyy-MM-dd"
+                ),
+                "time": self.time_edit.time().toString(
+                    "HH:mm:ss"
+                ),
+            },
+
+            "sun": {
+                "elevation": 12.4,
+                "azimuth": 180.0,
+                "status": "Above Horizon",
+                "visible": True,
+            },
+
+            "earth": {
+                "elevation": 8.2,
+                "azimuth": 95.0,
+                "status": "Visible",
+                "visible": True,
+            },
+        }
+
+        # Update Dashboard results
+        self.sun_elevation.setText(
+            f'{results["sun"]["elevation"]}°'
+        )
+
+        self.sun_azimuth.setText(
+            f'{results["sun"]["azimuth"]}°'
+        )
+
+        self.earth_elevation.setText(
+            f'{results["earth"]["elevation"]}°'
+        )
+
+        self.earth_azimuth.setText(
+            f'{results["earth"]["azimuth"]}°'
+        )
+
+        self.sun_visibility.setText(
+            "Visible"
+            if results["sun"]["visible"]
+            else "Not Visible"
+        )
+
+        self.earth_visibility.setText(
+            "Visible"
+            if results["earth"]["visible"]
+            else "Not Visible"
+        )
 
         self.status_label.setText(
-            f"Analysis completed for {site}."
+            f"Analysis completed for {site_name}."
         )
+
+        # Send structured results to MainWindow
+        self.analysis_completed.emit(results)

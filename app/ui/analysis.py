@@ -221,43 +221,46 @@ class AnalysisPage(QWidget):
         main_layout.addStretch()
 
     # ------------------------------------------------------
-    # Temporary result display
+    # Display analysis results
     # ------------------------------------------------------
 
     def show_results(self, results):
 
+        sun = results["sun"]
+        earth = results["earth"]
+
         self.sun_elevation.setText(
-            results["sun_elevation"]
+            f'{sun["elevation"]}°'
         )
 
         self.sun_azimuth.setText(
-            results["sun_azimuth"]
+            f'{sun["azimuth"]}°'
         )
 
         self.sun_status.setText(
-            results["sun_status"]
+            sun["status"]
         )
 
         self.earth_elevation.setText(
-            results["earth_elevation"]
+            f'{earth["elevation"]}°'
         )
 
         self.earth_azimuth.setText(
-            results["earth_azimuth"]
+            f'{earth["azimuth"]}°'
         )
 
         self.earth_status.setText(
-            results["earth_status"]
+            earth["status"]
         )
 
         self.sun_visibility.setText(
-            results["sun_visibility"]
+            "Visible" if sun["visible"] else "Not Visible"
         )
 
         self.earth_visibility.setText(
-            results["earth_visibility"]
+            "Visible" if earth["visible"] else "Not Visible"
         )
 
         self.status_label.setText(
-            "Analysis results loaded."
+            f'Analysis results loaded for {results["site"]["name"]}.'
         )

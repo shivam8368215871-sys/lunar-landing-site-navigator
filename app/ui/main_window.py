@@ -1,4 +1,5 @@
 import sys
+
 from app.ui.sites import SitesPage
 from app.ui.dashboard import Dashboard
 from app.ui.analysis import AnalysisPage
@@ -15,22 +16,6 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 
-def load_test_analysis(self):
-
-    results = {
-        "sun_elevation": "12.4°",
-        "sun_azimuth": "180.0°",
-        "sun_status": "Above Horizon",
-
-        "earth_elevation": "8.2°",
-        "earth_azimuth": "95.0°",
-        "earth_status": "Visible",
-
-        "sun_visibility": "Visible",
-        "earth_visibility": "Visible",
-    }
-
-    self.analysis_page.show_results(results)
 
 class MainWindow(QMainWindow):
 
@@ -72,7 +57,7 @@ class MainWindow(QMainWindow):
         # Pages
         self.pages = QStackedWidget()
 
-        dashboard_page = Dashboard()
+        self.dashboard_page = Dashboard()
 
         sites_page = SitesPage()
 
@@ -82,7 +67,7 @@ class MainWindow(QMainWindow):
 
         self.settings_page = SettingsPage()
 
-        self.pages.addWidget(dashboard_page)
+        self.pages.addWidget(self.dashboard_page)
         self.pages.addWidget(sites_page)
         self.pages.addWidget(self.analysis_page)
         self.pages.addWidget(self.compare_page)
@@ -112,4 +97,16 @@ class MainWindow(QMainWindow):
             lambda: self.pages.setCurrentIndex(4)
         )
 
-        
+        # Dashboard → Analysis
+        self.dashboard_page.analysis_completed.connect(
+            self.show_analysis_results
+        )
+
+    def show_analysis_results(self, results):
+
+        self.analysis_page.show_results(results)
+
+        # Automatically open Analysis page
+        self.pages.setCurrentWidget(
+            self.analysis_page
+        )
