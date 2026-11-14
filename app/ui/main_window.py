@@ -59,7 +59,7 @@ class MainWindow(QMainWindow):
 
         self.dashboard_page = Dashboard()
 
-        sites_page = SitesPage()
+        self.sites_page = SitesPage()
 
         self.analysis_page = AnalysisPage()
 
@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
         self.settings_page = SettingsPage()
 
         self.pages.addWidget(self.dashboard_page)
-        self.pages.addWidget(sites_page)
+        self.pages.addWidget(self.sites_page)
         self.pages.addWidget(self.analysis_page)
         self.pages.addWidget(self.compare_page)
         self.pages.addWidget(self.settings_page)
@@ -100,6 +100,11 @@ class MainWindow(QMainWindow):
         # Dashboard → Analysis
         self.dashboard_page.analysis_completed.connect(
             self.show_analysis_results
+        )
+
+                # Sites → Dashboard
+        self.sites_page.site_changed.connect(
+            self.dashboard_page.set_location
         )
 
     def show_analysis_results(self, results):

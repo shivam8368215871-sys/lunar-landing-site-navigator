@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -5,7 +8,12 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QComboBox,
     QLabel,
+    QSizePolicy,
+    QScrollArea,
 )
+
+from app.data.sites import LANDING_SITES
+from app.science.engine import LunarAnalysisEngine
 
 
 class ComparePage(QWidget):
@@ -13,92 +21,159 @@ class ComparePage(QWidget):
     def __init__(self):
         super().__init__()
 
+        self.engine = LunarAnalysisEngine()
+        self.engine.load()
+
         self.setup_ui()
 
     def setup_ui(self):
 
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(16)
 
+        # -------------------------------------------------
         # Title
+        # -------------------------------------------------
+
         title = QLabel("Compare Landing Sites")
         title.setStyleSheet("""
             font-size: 28px;
             font-weight: bold;
         """)
 
-        subtitle = QLabel(
-            "Compare environmental and visibility conditions between two lunar sites."
+        title.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed,
         )
+
+        subtitle = QLabel(
+            "Compare real Sun and Earth conditions between two lunar sites."
+        )
+
+        subtitle.setWordWrap(True)
 
         main_layout.addWidget(title)
         main_layout.addWidget(subtitle)
 
+        # -------------------------------------------------
         # Site selection
+        # -------------------------------------------------
+
         selection_layout = QHBoxLayout()
+        selection_layout.setSpacing(16)
 
-        site_a_group = QGroupBox("Site A")
-        site_a_layout = QVBoxLayout()
+        site_a_group = self._create_site_selector(
+            "Site A",
+            self.site_a_combo_placeholder(),
+        )
 
-        self.site_a_combo = QComboBox()
-        self.site_a_combo.addItems([
-            "Shackleton Crater",
-            "Cabeus Crater",
-            "Malapert Massif",
-        ])
+        site_b_group = self._create_site_selector(
+            "Site B",
+            self.site_b_combo_placeholder(),
+        )
 
-        site_a_layout.addWidget(QLabel("Select landing site:"))
-        site_a_layout.addWidget(self.site_a_combo)
+        selection_layout.addWidget(
+            site_a_group,
+            1,
+        )
 
-        site_a_group.setLayout(site_a_layout)
+        selection_layout.addWidget(
+            site_b_group,
+            1,
+        )
 
-        site_b_group = QGroupBox("Site B")
-        site_b_layout = QVBoxLayout()
+        main_layout.addLayout(
+            selection_layout
+        )
 
-        self.site_b_combo = QComboBox()
-        self.site_b_combo.addItems([
-            "Shackleton Crater",
-            "Cabeus Crater",
-            "Malapert Massif",
-        ])
+        # -------------------------------------------------
+        # Results
+        # -------------------------------------------------
 
-        site_b_layout.addWidget(QLabel("Select landing site:"))
-        site_b_layout.addWidget(self.site_b_combo)
+        comparison_group = QGroupBox(
+            "Real-Time SPICE Comparison"
+        )
 
-        site_b_group.setLayout(site_b_layout)
+        comparison_layout = QHBoxLayout(
+            comparison_group
+        )
 
-        selection_layout.addWidget(site_a_group)
-        selection_layout.addWidget(site_b_group)
+        comparison_layout.setContentsMargins(
+            12,
+            12,
+            12,
+            12,
+        )
 
-        main_layout.addLayout(selection_layout)
-
-        # Comparison results
-        comparison_group = QGroupBox("Comparison Results")
-        comparison_layout = QHBoxLayout()
+        comparison_layout.setSpacing(20)
 
         self.site_a_results = QLabel()
         self.site_b_results = QLabel()
 
-        self.site_a_results.setStyleSheet("""
-            font-size: 16px;
-        """)
+        self._configure_result_label(
+            self.site_a_results
+        )
 
-        self.site_b_results.setStyleSheet("""
-            font-size: 16px;
-        """)
+        self._configure_result_label(
+            self.site_b_results
+        )
 
-        comparison_layout.addWidget(self.site_a_results)
-        comparison_layout.addWidget(self.site_b_results)
+        comparison_layout.addWidget(
+            self.site_a_results,
+            1,
+        )
 
-        comparison_group.setLayout(comparison_layout)
+        comparison_layout.addWidget(
+            self.site_b_results,
+            1,
+        )
 
-        main_layout.addWidget(comparison_group)
+        main_layout.addWidget(
+            comparison_group,
+            1,
+        )
 
+        # -------------------------------------------------
+        # Time
+        # -------------------------------------------------
+
+        self.time_label = QLabel()
+
+        self.time_label.setWordWrap(True)
+
+        self.time_label.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed,
+        )
+
+        main_layout.addWidget(
+            self.time_label
+        )
+
+        # -------------------------------------------------
         # Status
-        self.status_label = QLabel("Select two sites to compare.")
+        # -------------------------------------------------
 
-        main_layout.addWidget(self.status_label)
+        self.status_label = QLabel(
+            "Select two sites to compare."
+        )
 
-        # Connect selection changes
+        self.status_label.setWordWrap(True)
+
+        self.status_label.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed,
+        )
+
+        main_layout.addWidget(
+            self.status_label
+        )
+
+        # -------------------------------------------------
+        # Connections
+        # -------------------------------------------------
+
         self.site_a_combo.currentTextChanged.connect(
             self.update_comparison
         )
@@ -107,73 +182,190 @@ class ComparePage(QWidget):
             self.update_comparison
         )
 
-        # Initial comparison
         self.update_comparison()
+
+    def site_a_combo_placeholder(self):
+        return "site_a"
+
+    def site_b_combo_placeholder(self):
+        return "site_b"
+
+    def _create_site_selector(
+        self,
+        title,
+        identifier,
+    ):
+        group = QGroupBox(title)
+
+        layout = QVBoxLayout(group)
+
+        layout.setSpacing(8)
+
+        combo = QComboBox()
+
+        combo.addItems(
+            list(LANDING_SITES.keys())
+        )
+
+        combo.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed,
+        )
+
+        combo.setMinimumHeight(38)
+
+        if identifier == "site_a":
+            self.site_a_combo = combo
+        else:
+            self.site_b_combo = combo
+
+        label = QLabel(
+            "Select landing site:"
+        )
+
+        label.setWordWrap(True)
+
+        layout.addWidget(label)
+        layout.addWidget(combo)
+
+        return group
+
+    @staticmethod
+    def _configure_result_label(label):
+
+        label.setWordWrap(True)
+
+        label.setAlignment(
+            Qt.AlignTop | Qt.AlignLeft
+        )
+
+        label.setTextFormat(
+            Qt.RichText
+        )
+
+        label.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Expanding,
+        )
+
+        label.setMinimumWidth(0)
+
+        label.setStyleSheet("""
+            QLabel {
+                font-size: 15px;
+                padding: 8px;
+            }
+        """)
 
     def update_comparison(self):
 
-        site_a = self.site_a_combo.currentText()
-        site_b = self.site_b_combo.currentText()
+        site_a_name = (
+            self.site_a_combo.currentText()
+        )
 
-        data = {
-            "Shackleton Crater": {
-                "sun_elevation": "12.4°",
-                "earth_elevation": "8.2°",
-                "sun_visibility": "Visible",
-                "earth_visibility": "Visible",
-            },
+        site_b_name = (
+            self.site_b_combo.currentText()
+        )
 
-            "Cabeus Crater": {
-                "sun_elevation": "7.8°",
-                "earth_elevation": "5.6°",
-                "sun_visibility": "Visible",
-                "earth_visibility": "Visible",
-            },
+        site_a = LANDING_SITES[
+            site_a_name
+        ]
 
-            "Malapert Massif": {
-                "sun_elevation": "18.1°",
-                "earth_elevation": "11.3°",
-                "sun_visibility": "Visible",
-                "earth_visibility": "Visible",
-            },
-        }
+        site_b = LANDING_SITES[
+            site_b_name
+        ]
 
-        a = data[site_a]
-        b = data[site_b]
+        analysis_time = datetime.now(
+            timezone.utc
+        ).replace(
+            tzinfo=None
+        )
+
+        try:
+
+            result_a = self.engine.analyze(
+                site_a,
+                analysis_time,
+            )
+
+            result_b = self.engine.analyze(
+                site_b,
+                analysis_time,
+            )
+
+        except Exception as error:
+
+            self.site_a_results.setText(
+                f"<b>{site_a_name}</b><br><br>"
+                "Analysis failed."
+            )
+
+            self.site_b_results.setText(
+                f"<b>{site_b_name}</b><br><br>"
+                "Analysis failed."
+            )
+
+            self.status_label.setText(
+                f"SPICE analysis error: {error}"
+            )
+
+            return
 
         self.site_a_results.setText(
-            f"""
-<b>{site_a}</b>
-
-Sun Elevation: {a["sun_elevation"]}
-
-Earth Elevation: {a["earth_elevation"]}
-
-Sun Visibility: {a["sun_visibility"]}
-
-Earth Visibility: {a["earth_visibility"]}
-"""
+            self._format_result(
+                result_a
+            )
         )
 
         self.site_b_results.setText(
-            f"""
-<b>{site_b}</b>
-
-Sun Elevation: {b["sun_elevation"]}
-
-Earth Elevation: {b["earth_elevation"]}
-
-Sun Visibility: {b["sun_visibility"]}
-
-Earth Visibility: {b["earth_visibility"]}
-"""
+            self._format_result(
+                result_b
+            )
         )
 
-        if site_a == site_b:
+        self.time_label.setText(
+            "Analysis time (UTC): "
+            + analysis_time.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        )
+
+        if site_a_name == site_b_name:
+
             self.status_label.setText(
                 "Select two different sites for a meaningful comparison."
             )
+
         else:
+
             self.status_label.setText(
-                f"Comparing {site_a} with {site_b}."
+                f"Comparing {site_a_name} with "
+                f"{site_b_name} using real NASA SPICE data."
             )
+
+    @staticmethod
+    def _format_result(result):
+
+        return f"""
+<b>{result.site.name}</b>
+
+Latitude: {result.site.latitude:.2f}°
+
+Longitude: {result.site.longitude:.2f}°
+
+<b>Sun</b>
+
+Elevation: {result.sun.elevation:.2f}°
+
+Azimuth: {result.sun.azimuth:.2f}°
+
+Visibility: {result.sun.status}
+
+<b>Earth</b>
+
+Elevation: {result.earth.elevation:.2f}°
+
+Azimuth: {result.earth.azimuth:.2f}°
+
+Visibility: {result.earth.status}
+"""

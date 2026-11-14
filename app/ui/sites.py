@@ -1,3 +1,4 @@
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -6,10 +7,20 @@ from PySide6.QtWidgets import (
     QListWidget,
     QGroupBox,
     QGridLayout,
+    QDialog,
+    QLineEdit,
+    QPushButton,
+    QMessageBox,
 )
+
+from app.core.models import Site
+from app.data.sites import LANDING_SITES
+from app.ui.lunar_maps import LunarMapsWidget
 
 
 class SitesPage(QWidget):
+
+    site_changed = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -127,7 +138,20 @@ class SitesPage(QWidget):
             content_layout
         )
 
-        main_layout.addStretch()
+        # --------------------------------------------------
+        # Lunar Maps
+        # --------------------------------------------------
+
+        self.lunar_maps = LunarMapsWidget()
+
+        main_layout.addWidget(
+            self.lunar_maps,
+            1
+        )
+
+        # Give the map area the remaining vertical space.
+        main_layout.setStretch(2, 0)
+        main_layout.setStretch(3, 1)
 
         # Select first site automatically
         self.site_list.setCurrentRow(0)
@@ -138,54 +162,172 @@ class SitesPage(QWidget):
 
     def site_selected(self, row):
 
-        sites = {
-            0: {
-                "name": "Shackleton Crater",
-                "latitude": "-89.90°",
-                "longitude": "0.00°",
-                "description": (
-                    "A crater near the lunar south pole "
-                    "considered relevant for polar landing analysis."
-                ),
-            },
+        descriptions = {
+            "Shackleton Crater": (
+                "A crater near the lunar south pole "
+                "considered relevant for polar landing analysis."
+            ),
 
-            1: {
-                "name": "Cabeus Crater",
-                "latitude": "-84.90°",
-                "longitude": "-35.50°",
-                "description": (
-                    "A large crater in the lunar south-polar region."
-                ),
-            },
+            "Cabeus Crater": (
+                "A large crater in the lunar south-polar region."
+            ),
 
-            2: {
-                "name": "Malapert Massif",
-                "latitude": "-86.00°",
-                "longitude": "0.00°",
-                "description": (
-                    "A mountainous region near the lunar south pole."
-                ),
-            },
+            "Malapert Massif": (
+                "A mountainous region near the lunar south pole."
+            ),
 
-            3: {
-                "name": "Custom Location",
-                "latitude": "User defined",
-                "longitude": "User defined",
-                "description": (
-                    "Allows a user-defined lunar latitude "
-                    "and longitude."
-                ),
-            },
+            "Custom Location": (
+                "Allows a user-defined lunar latitude "
+                "and longitude."
+            ),
         }
 
-        if row not in sites:
+        if row < 0:
             return
 
-        site = sites[row]
+        site_name = self.site_list.item(row).text()
 
-        self.name_value.setText(site["name"])
-        self.latitude_value.setText(site["latitude"])
-        self.longitude_value.setText(site["longitude"])
-        self.description_value.setText(
-            site["description"]
+        if site_name == "Custom Location":
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Custom Lunar Location")
+            dialog.setMinimumWidth(360)
+
+            layout = QVBoxLayout(dialog)
+
+            layout.addWidget(
+                QLabel("Enter custom lunar coordinates:")
+            )
+
+            layout.addWidget(
+                QLabel("Latitude (-90° to 90°)")
+            )
+
+            latitude_input = QLineEdit()
+            latitude_input.setPlaceholderText(
+                "-90 to 90"
+            )
+            layout.addWidget(latitude_input)
+
+            layout.addWidget(
+                QLabel("Longitude (-180° to 180°)")
+            )
+
+            longitude_input = QLineEdit()
+            longitude_input.setPlaceholderText(
+                "-180 to 180"
+            )
+            layout.addWidget(longitude_input)
+
+            buttons = QHBoxLayout()
+
+            cancel_button = QPushButton("Cancel")
+            apply_button = QPushButton("Apply Location")
+
+            buttons.addWidget(cancel_button)
+            buttons.addWidget(apply_button)
+
+            layout.addLayout(buttons)
+
+            cancel_button.clicked.connect(
+                dialog.reject
+            )
+
+            def apply_custom_location():
+                try:
+                    latitude = float(
+                        latitude_input.text().strip()
+                    )
+                    longitude = float(
+                        longitude_input.text().strip()
+                    )
+                except ValueError:
+                    QMessageBox.warning(
+                        dialog,
+                        "Invalid Coordinates",
+                        "Latitude and longitude must be numeric.",
+                    )
+                    return
+
+                if not -90 <= latitude <= 90:
+                    QMessageBox.warning(
+                        dialog,
+                        "Invalid Latitude",
+                        "Latitude must be between -90° and 90°.",
+                    )
+                    return
+
+                if not -180 <= longitude <= 180:
+                    QMessageBox.warning(
+                        dialog,
+                        "Invalid Longitude",
+                        "Longitude must be between -180° and 180°.",
+                    )
+                    return
+
+                custom_site = Site(
+                    name="Custom Location",
+                    latitude=latitude,
+                    longitude=longitude,
+                )
+
+                self.name_value.setText(
+                    custom_site.name
+                )
+
+                self.latitude_value.setText(
+                    f"{latitude:.2f}°"
+                )
+
+                self.longitude_value.setText(
+                    f"{longitude:.2f}°"
+                )
+
+                self.description_value.setText(
+                    descriptions[site_name]
+                )
+
+                self.lunar_maps.set_location(
+                    latitude,
+                    longitude,
+                )
+
+                self.site_changed.emit(
+                    custom_site
+                )
+
+                dialog.accept()
+
+            apply_button.clicked.connect(
+                apply_custom_location
+            )
+
+            dialog.exec()
+
+            return
+
+        site = LANDING_SITES.get(site_name)
+
+        if site is None:
+            return
+
+        self.name_value.setText(site.name)
+
+        self.latitude_value.setText(
+            f"{site.latitude:.2f}°"
         )
+
+        self.longitude_value.setText(
+            f"{site.longitude:.2f}°"
+        )
+
+        self.description_value.setText(
+            descriptions[site_name]
+        )
+
+        # Update lunar maps for the selected site
+        self.lunar_maps.set_location(
+            site.latitude,
+            site.longitude,
+        )
+
+        self.site_changed.emit(site)

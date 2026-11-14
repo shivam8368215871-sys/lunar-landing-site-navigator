@@ -1,0 +1,411 @@
+from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap, QPainter, QPen, QBrush
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
+    QSizePolicy,
+)
+
+
+class LunarMapView(QLabel):
+    """
+    Lightweight image-based lunar map.
+
+    Displays a pre-rendered image and optionally draws
+    the selected lunar location on top of it.
+    """
+
+    def __init__(self, image_path: Path, parent=None):
+        super().__init__(parent)
+
+        self.image_path = image_path
+        self.latitude = None
+        self.longitude = None
+
+        self.base_pixmap = QPixmap(str(image_path))
+
+        if self.base_pixmap.isNull():
+            raise FileNotFoundError(
+                f"Could not load lunar map: {image_path}"
+            )
+
+        self.setAlignment(Qt.AlignCenter)
+
+        self.setMinimumSize(320, 320)
+
+        self.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Expanding,
+        )
+
+        self.setStyleSheet("""
+            background: #10141b;
+            border: 1px solid #303844;
+        """)
+
+    def set_location(self, latitude, longitude):
+        self.latitude = float(latitude)
+        self.longitude = float(longitude)
+        self.update()
+
+    def clear_location(self):
+        self.latitude = None
+        self.longitude = None
+        self.update()
+
+    def _coordinate_to_pixel(self):
+        """
+        Convert south-polar coordinates to normalized image
+        coordinates.
+
+        This is currently based on the south-polar stereographic
+        convention used by the project.
+        """
+
+        if (
+            self.latitude is None
+            or self.longitude is None
+        ):
+            return None
+
+        import math
+
+        lat = float(self.latitude)
+        lon = float(self.longitude)
+
+        if not -90.0 <= lat <= -80.0:
+            return None
+
+        R = 1737.4
+
+        phi = math.radians(lat)
+        lam = math.radians(lon)
+
+        rho = (
+            2.0
+            * R
+            * math.tan(
+                math.pi / 4.0
+                + phi / 2.0
+            )
+        )
+
+        max_rho = (
+            2.0
+            * R
+            * math.tan(
+                math.pi / 4.0
+                + math.radians(-80.0) / 2.0
+            )
+        )
+
+        x = rho * math.sin(lam)
+        y = -rho * math.cos(lam)
+
+        nx = 0.5 + x / (2.0 * max_rho)
+        ny = 0.5 + y / (2.0 * max_rho)
+
+        nx = max(0.0, min(1.0, nx))
+        ny = max(0.0, min(1.0, ny))
+
+        return nx, ny
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+
+        painter.setRenderHint(
+            QPainter.SmoothPixmapTransform
+        )
+
+        painter.fillRect(
+            self.rect(),
+            self.palette().window()
+        )
+
+        if self.base_pixmap.isNull():
+            painter.end()
+            return
+
+        available = self.rect()
+
+        scaled = self.base_pixmap.scaled(
+            available.size(),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+
+        x = (
+            available.width()
+            - scaled.width()
+        ) // 2
+
+        y = (
+            available.height()
+            - scaled.height()
+        ) // 2
+
+        painter.drawPixmap(
+            x,
+            y,
+            scaled,
+        )
+
+        normalized = self._coordinate_to_pixel()
+
+        if normalized is not None:
+            nx, ny = normalized
+
+            marker_x = x + nx * scaled.width()
+            marker_y = y + ny * scaled.height()
+
+            painter.setPen(
+                QPen(Qt.white, 3)
+            )
+
+            painter.setBrush(
+                QBrush(Qt.red)
+            )
+
+            painter.drawEllipse(
+                int(marker_x - 8),
+                int(marker_y - 8),
+                16,
+                16,
+            )
+
+            painter.setPen(
+                QPen(Qt.white, 1)
+            )
+
+            painter.drawLine(
+                int(marker_x - 14),
+                int(marker_y),
+                int(marker_x + 14),
+                int(marker_y),
+            )
+
+            painter.drawLine(
+                int(marker_x),
+                int(marker_y - 14),
+                int(marker_x),
+                int(marker_y + 14),
+            )
+
+        painter.end()
+
+
+class LunarMapsWidget(QWidget):
+    """
+    Three-panel lunar visualization:
+
+        1. Surface Map
+        2. LOLA Height Map
+        3. Analysis Heat Map
+
+    The heat-map panel is intentionally prepared here but
+    will be connected to the real landing-analysis score
+    in the next step.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        root = Path(__file__).resolve().parents[2]
+
+        maps_dir = (
+            root
+            / "assets"
+            / "maps"
+        )
+
+        self.surface_map = LunarMapView(
+            maps_dir
+            / "moon_surface_map.png"
+        )
+
+        self.height_map = LunarMapView(
+            maps_dir
+            / "moon_height_map.png"
+        )
+
+        self.heat_map = self._create_placeholder(
+            "Landing Analysis\nHeat Map"
+        )
+
+        self._setup_ui()
+
+    def _create_placeholder(self, text):
+        label = QLabel(text)
+
+        label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        label.setMinimumSize(
+            300,
+            300,
+        )
+
+        label.setStyleSheet("""
+            background: #10141b;
+            color: #8f9aaa;
+            border: 1px solid #303844;
+            font-size: 16px;
+            font-weight: 600;
+        """)
+
+        return label
+
+    def _setup_ui(self):
+        main_layout = QVBoxLayout(self)
+
+        main_layout.setContentsMargins(
+            8,
+            8,
+            8,
+            4,
+        )
+
+        main_layout.setSpacing(6)
+
+        title = QLabel(
+            "Lunar Surface Maps"
+        )
+
+        title.setStyleSheet("""
+            font-size: 24px;
+            font-weight: 700;
+            color: #ffffff;
+        """)
+
+        subtitle = QLabel(
+            "Surface imagery, LOLA elevation, "
+            "and landing-site analysis."
+        )
+
+        subtitle.setStyleSheet("""
+            color: #9aa5b5;
+            font-size: 13px;
+        """)
+
+        main_layout.addWidget(
+            title
+        )
+
+        main_layout.addWidget(
+            subtitle
+        )
+
+        maps_layout = QHBoxLayout()
+
+        maps_layout.setSpacing(8)
+
+        maps_layout.addWidget(
+            self._panel(
+                "Surface Map",
+                self.surface_map,
+            ),
+            1,
+        )
+
+        maps_layout.addWidget(
+            self._panel(
+                "LOLA Height Map",
+                self.height_map,
+            ),
+            1,
+        )
+
+        maps_layout.addWidget(
+            self._panel(
+                "Analysis Heat Map",
+                self.heat_map,
+            ),
+            1,
+        )
+
+        main_layout.addLayout(
+            maps_layout,
+            1,
+        )
+
+        self.location_label = QLabel(
+            "Selected location: --"
+        )
+
+        self.location_label.setStyleSheet("""
+            color: #b9c3d0;
+            font-size: 13px;
+            padding: 6px;
+        """)
+
+        main_layout.addWidget(
+            self.location_label
+        )
+
+    def _panel(self, title, widget):
+        frame = QFrame()
+
+        frame.setStyleSheet("""
+            QFrame {
+                background: #171c24;
+                border: 1px solid #2d3542;
+                border-radius: 8px;
+            }
+        """)
+
+        layout = QVBoxLayout(frame)
+
+        label = QLabel(title)
+
+        label.setStyleSheet("""
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+        """)
+
+        layout.addWidget(
+            label
+        )
+
+        layout.addWidget(
+            widget,
+            1,
+        )
+
+        return frame
+
+    def set_location(
+        self,
+        latitude: float,
+        longitude: float,
+    ):
+        self.surface_map.set_location(
+            latitude,
+            longitude,
+        )
+
+        self.height_map.set_location(
+            latitude,
+            longitude,
+        )
+
+        self.location_label.setText(
+            f"Selected location: "
+            f"{latitude:.4f}°, "
+            f"{longitude:.4f}°"
+        )
+
+    def clear_location(self):
+        self.surface_map.clear_location()
+        self.height_map.clear_location()
+
+        self.location_label.setText(
+            "Selected location: --"
+        )
