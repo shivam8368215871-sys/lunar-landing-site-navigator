@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QScrollArea,
     QLineEdit,
+    QPushButton,
 )
 
 from app.data.sites import LANDING_SITES
@@ -98,8 +99,43 @@ class ComparePage(QWidget):
             1,
         )
 
+
         main_layout.addLayout(
             selection_layout
+        )
+
+        # -------------------------------------------------
+        # Compare action
+        # -------------------------------------------------
+
+        self.compare_button = QPushButton(
+            "Compare Landing Sites"
+        )
+
+        self.compare_button.setMinimumHeight(42)
+
+        self.compare_button.setStyleSheet("""
+            QPushButton {
+                font-size: 15px;
+                font-weight: bold;
+                padding: 8px 18px;
+            }
+
+            QPushButton:hover {
+                background-color: #e8f0fe;
+            }
+
+            QPushButton:pressed {
+                background-color: #dbe7f9;
+            }
+        """)
+
+        self.compare_button.clicked.connect(
+            self.update_comparison
+        )
+
+        main_layout.addWidget(
+            self.compare_button
         )
 
         # -------------------------------------------------
