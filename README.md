@@ -383,3 +383,11 @@ The repository is designed so that the source code can be cloned independently o
 
 ![Lunar Landing Site Navigator - Screenshot 6](images/Screenshot%20From%202026-11-15%2018-57-15.png)
 
+## 14. Example Mission Output
+
+A generated PDF mission report is included as an example of the application's analysis output.
+
+**Download the example mission report:**
+
+[Download Lunar Landing Mission Report](outputs/lunar-landing-mission-report.pdf)
+
