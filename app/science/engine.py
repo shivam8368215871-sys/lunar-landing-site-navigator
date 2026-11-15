@@ -170,3 +170,291 @@ class LunarAnalysisEngine:
             )
 
         return results
+
+    def calculate_lighting_metrics(
+        self,
+        results: list[AnalysisResult],
+    ) -> dict[str, float]:
+        """
+        Calculate terrain-aware illumination metrics from a real
+        SPICE + LOLA mission timeline.
+
+        Illumination percentage is based on the duration of timeline
+        intervals during which the Sun is mission-visible.
+
+        Longest dark period is the longest continuous interval during
+        which the Sun is mission-blocked by the terrain-aware result.
+        The precision therefore follows the selected timeline sampling.
+        """
+
+        if not results:
+            raise ValueError(
+                "results must contain at least one analysis result."
+            )
+
+        if len(results) == 1:
+            return {
+                "illumination_percent": (
+                    100.0
+                    if results[0].sun.mission_visible
+                    else 0.0
+                ),
+                "longest_dark_hours": 0.0,
+            }
+
+        illuminated_hours = 0.0
+        dark_hours = 0.0
+        longest_dark_hours = 0.0
+        current_dark_hours = 0.0
+
+        for current, next_result in zip(
+            results,
+            results[1:],
+        ):
+            interval_hours = (
+                next_result.time - current.time
+            ).total_seconds() / 3600.0
+
+            if current.sun.mission_visible:
+                illuminated_hours += interval_hours
+                current_dark_hours = 0.0
+            else:
+                dark_hours += interval_hours
+                current_dark_hours += interval_hours
+                longest_dark_hours = max(
+                    longest_dark_hours,
+                    current_dark_hours,
+                )
+
+        total_hours = (
+            illuminated_hours + dark_hours
+        )
+
+        illumination_percent = (
+            100.0 * illuminated_hours / total_hours
+            if total_hours > 0.0
+            else 0.0
+        )
+
+        return {
+            "illumination_percent": illumination_percent,
+            "longest_dark_hours": longest_dark_hours,
+        }
+
+    def calculate_communications_metrics(
+        self,
+        results: list[AnalysisResult],
+    ) -> dict[str, float]:
+        """
+        Calculate terrain-aware Earth communication/contact metrics
+        from a real SPICE + LOLA mission timeline.
+
+        Earth contact is defined by terrain-aware Earth mission
+        visibility. Contact hours are calculated from the duration
+        of timeline intervals during which Earth is mission-visible.
+
+        Longest communication blackout follows the same timeline
+        sampling precision as the supplied results.
+        """
+
+        if not results:
+            raise ValueError(
+                "results must contain at least one analysis result."
+            )
+
+        if len(results) == 1:
+            return {
+                "contact_hours": 0.0,
+                "contact_percent": (
+                    100.0
+                    if results[0].earth.mission_visible
+                    else 0.0
+                ),
+                "longest_blackout_hours": 0.0,
+            }
+
+        contact_hours = 0.0
+        blackout_hours = 0.0
+        longest_blackout_hours = 0.0
+        current_blackout_hours = 0.0
+
+        for current, next_result in zip(
+            results,
+            results[1:],
+        ):
+            interval_hours = (
+                next_result.time - current.time
+            ).total_seconds() / 3600.0
+
+            if current.earth.mission_visible:
+                contact_hours += interval_hours
+                current_blackout_hours = 0.0
+            else:
+                blackout_hours += interval_hours
+                current_blackout_hours += interval_hours
+                longest_blackout_hours = max(
+                    longest_blackout_hours,
+                    current_blackout_hours,
+                )
+
+        total_hours = (
+            contact_hours + blackout_hours
+        )
+
+        contact_percent = (
+            100.0 * contact_hours / total_hours
+            if total_hours > 0.0
+            else 0.0
+        )
+
+        return {
+            "contact_hours": contact_hours,
+            "contact_percent": contact_percent,
+            "longest_blackout_hours": longest_blackout_hours,
+        }
+
+
+    def calculate_suitability_score(
+        self,
+        lighting_metrics: dict[str, float],
+        communications_metrics: dict[str, float],
+    ) -> dict[str, float]:
+        """
+        Calculate a transparent 100-point landing-site suitability score.
+
+        The score combines terrain-aware illumination,
+        Earth communication availability, and the longest
+        continuous dark period.
+
+        Weights:
+        - Illumination: 40 points
+        - Earth contact: 35 points
+        - Maximum dark-period penalty: 25 points
+
+        The darkness component is linearly scaled across
+        a 7-day (168-hour) mission window.
+        """
+
+        illumination_percent = float(
+            lighting_metrics["illumination_percent"]
+        )
+
+        contact_percent = float(
+            communications_metrics["contact_percent"]
+        )
+
+        longest_dark_hours = float(
+            lighting_metrics["longest_dark_hours"]
+        )
+
+        illumination_points = (
+            illumination_percent * 0.40
+        )
+
+        contact_points = (
+            contact_percent * 0.35
+        )
+
+        darkness_fraction = min(
+            max(longest_dark_hours / 168.0, 0.0),
+            1.0,
+        )
+
+        darkness_points = (
+            (1.0 - darkness_fraction) * 25.0
+        )
+
+        total_score = (
+            illumination_points
+            + contact_points
+            + darkness_points
+        )
+
+        return {
+            "score": total_score,
+            "illumination_points": illumination_points,
+            "contact_points": contact_points,
+            "darkness_points": darkness_points,
+        }
+
+    def calculate_next_events(
+        self,
+        results: list[AnalysisResult],
+    ) -> dict[str, object | None]:
+        """
+        Identify the next sampled Sun and Earth visibility events
+        from a real SPICE + LOLA mission timeline.
+
+        Event definitions:
+        - Sun Rise: terrain-aware Sun visibility changes False -> True
+        - Sun Set: terrain-aware Sun visibility changes True -> False
+        - Earth Contact: terrain-aware Earth visibility changes False -> True
+        - Earth Contact Loss: terrain-aware Earth visibility changes True -> False
+
+        Event times are the timestamps of the first timeline sample
+        after the visibility transition. Countdown hours are measured
+        from the first timeline timestamp.
+        """
+
+        if not results:
+            raise ValueError(
+                "results must contain at least one analysis result."
+            )
+
+        events = {
+            "next_sun_event": None,
+            "next_sun_event_time": None,
+            "next_sun_countdown_hours": None,
+            "next_earth_event": None,
+            "next_earth_event_time": None,
+            "next_earth_countdown_hours": None,
+        }
+
+        if len(results) < 2:
+            return events
+
+        start_time = results[0].time
+
+        for current, next_result in zip(
+            results,
+            results[1:],
+        ):
+            sun_before = current.sun.mission_visible
+            sun_after = next_result.sun.mission_visible
+
+            if sun_before != sun_after:
+                if sun_after:
+                    events["next_sun_event"] = "Sun Rise"
+                else:
+                    events["next_sun_event"] = "Sun Set"
+
+                events["next_sun_event_time"] = next_result.time
+
+                events["next_sun_countdown_hours"] = (
+                    next_result.time - start_time
+                ).total_seconds() / 3600.0
+
+                break
+
+        for current, next_result in zip(
+            results,
+            results[1:],
+        ):
+            earth_before = current.earth.mission_visible
+            earth_after = next_result.earth.mission_visible
+
+            if earth_before != earth_after:
+                if earth_after:
+                    events["next_earth_event"] = "Earth Contact"
+                else:
+                    events["next_earth_event"] = "Earth Contact Loss"
+
+                events["next_earth_event_time"] = next_result.time
+
+                events["next_earth_countdown_hours"] = (
+                    next_result.time - start_time
+                ).total_seconds() / 3600.0
+
+                break
+
+        return events

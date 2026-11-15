@@ -20,7 +20,7 @@ class LunarTimeSeriesPlot(QWidget):
         self.figure.clear()
         self.canvas.draw_idle()
 
-    def plot(self, results):
+    def plot(self, results, title="7-Day Lunar Mission Timeline"):
         self.figure.clear()
 
         axes = self.figure.add_subplot(111)
@@ -90,9 +90,7 @@ class LunarTimeSeriesPlot(QWidget):
             label="Geometric horizon",
         )
 
-        axes.set_title(
-            "7-Day Lunar Mission Timeline"
-        )
+        axes.set_title(title)
 
         axes.set_ylabel(
             "Elevation (degrees)"
