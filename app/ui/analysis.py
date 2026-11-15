@@ -189,6 +189,141 @@ class AnalysisPage(QWidget):
         main_layout.addLayout(celestial_layout)
 
         # --------------------------------------------------
+        # LOLA Terrain
+        # --------------------------------------------------
+
+        terrain_group = QGroupBox("LOLA Terrain")
+
+        terrain_layout = QGridLayout()
+
+        terrain_layout.addWidget(
+            QLabel("Elevation:"), 0, 0
+        )
+
+        self.terrain_elevation = QLabel("--")
+
+        terrain_layout.addWidget(
+            self.terrain_elevation, 0, 1
+        )
+
+        terrain_layout.addWidget(
+            QLabel("Local Slope:"), 1, 0
+        )
+
+        self.terrain_slope = QLabel("--")
+
+        terrain_layout.addWidget(
+            self.terrain_slope, 1, 1
+        )
+
+        terrain_layout.addWidget(
+            QLabel("Latitude:"), 2, 0
+        )
+
+        self.terrain_latitude = QLabel("--")
+
+        terrain_layout.addWidget(
+            self.terrain_latitude, 2, 1
+        )
+
+        terrain_layout.addWidget(
+            QLabel("Longitude:"), 3, 0
+        )
+
+        self.terrain_longitude = QLabel("--")
+
+        terrain_layout.addWidget(
+            self.terrain_longitude, 3, 1
+        )
+
+        terrain_layout.addWidget(
+            QLabel("LOLA Pixel:"), 4, 0
+        )
+
+        self.terrain_pixel = QLabel("--")
+
+        terrain_layout.addWidget(
+            self.terrain_pixel, 4, 1
+        )
+
+        terrain_layout.addWidget(
+            QLabel("DEM Resolution:"), 5, 0
+        )
+
+        self.terrain_resolution = QLabel("--")
+
+        terrain_layout.addWidget(
+            self.terrain_resolution, 5, 1
+        )
+
+        terrain_layout.addWidget(
+            QLabel("DEM Source:"), 6, 0
+        )
+
+        self.terrain_source = QLabel("--")
+        self.terrain_source.setWordWrap(True)
+
+        terrain_layout.addWidget(
+            self.terrain_source, 6, 1
+        )
+
+        terrain_layout.setColumnStretch(1, 1)
+
+        terrain_group.setLayout(
+            terrain_layout
+        )
+
+        main_layout.addWidget(
+            terrain_group
+        )
+
+        # --------------------------------------------------
+        # Landing Site
+        # --------------------------------------------------
+
+        self.landing_site_group = QGroupBox("Landing Site")
+
+        landing_site_layout = QGridLayout()
+
+        landing_site_layout.addWidget(
+            QLabel("Site:"), 0, 0
+        )
+
+        self.landing_site_name = QLabel("--")
+
+        landing_site_layout.addWidget(
+            self.landing_site_name, 0, 1
+        )
+
+        landing_site_layout.addWidget(
+            QLabel("Latitude:"), 1, 0
+        )
+
+        self.landing_site_latitude = QLabel("--")
+
+        landing_site_layout.addWidget(
+            self.landing_site_latitude, 1, 1
+        )
+
+        landing_site_layout.addWidget(
+            QLabel("Longitude:"), 2, 0
+        )
+
+        self.landing_site_longitude = QLabel("--")
+
+        landing_site_layout.addWidget(
+            self.landing_site_longitude, 2, 1
+        )
+
+        self.landing_site_group.setLayout(
+            landing_site_layout
+        )
+
+        main_layout.addWidget(
+            self.landing_site_group
+        )
+
+        # --------------------------------------------------
         # Visibility
         # --------------------------------------------------
 
@@ -549,6 +684,13 @@ class AnalysisPage(QWidget):
 
         main_layout.addStretch()
 
+        # TEMPORARY RUNTIME VISIBILITY TEST
+        self.landing_site_group.setMinimumHeight(140)
+        self.landing_site_group.setVisible(True)
+        self.landing_site_group.setStyleSheet(
+            "QGroupBox { border: 3px solid red; }"
+        )
+
         scroll_area.setWidget(content)
         outer_layout.addWidget(scroll_area)
 
@@ -560,6 +702,87 @@ class AnalysisPage(QWidget):
 
         sun = results["sun"]
         earth = results["earth"]
+        terrain = results.get("terrain")
+        site = results.get("site")
+
+        if site is None:
+            self.landing_site_name.setText("Unavailable")
+            self.landing_site_latitude.setText("Unavailable")
+            self.landing_site_longitude.setText("Unavailable")
+        else:
+            self.landing_site_name.setText(
+                site["name"]
+            )
+            self.landing_site_latitude.setText(
+                f'{site["latitude"]:.6f}°'
+            )
+            self.landing_site_longitude.setText(
+                f'{site["longitude"]:.6f}°'
+            )
+
+        if terrain is None:
+            self.terrain_elevation.setText(
+                "Unavailable"
+            )
+            self.terrain_slope.setText(
+                "Unavailable"
+            )
+            self.terrain_latitude.setText(
+                "Unavailable"
+            )
+            self.terrain_longitude.setText(
+                "Unavailable"
+            )
+            self.terrain_pixel.setText(
+                "Unavailable"
+            )
+            self.terrain_resolution.setText(
+                "Unavailable"
+            )
+            self.terrain_source.setText(
+                "Unavailable"
+            )
+        else:
+            self.terrain_elevation.setText(
+                f'{terrain["elevation_m"]:.3f} m'
+            )
+            self.terrain_slope.setText(
+                f'{terrain["slope_deg"]:.3f}°'
+            )
+            self.terrain_latitude.setText(
+                f'{terrain["latitude"]:.4f}°'
+            )
+            self.terrain_longitude.setText(
+                f'{terrain["longitude"]:.4f}°'
+            )
+            self.terrain_pixel.setText(
+                f'{terrain["row"]} × {terrain["column"]}'
+            )
+
+            resolution = terrain.get("resolution_m")
+
+            self.terrain_resolution.setText(
+                (
+                    f"{resolution:.3f} m/pixel"
+                    if resolution is not None
+                    else "Unavailable"
+                )
+            )
+
+            source_names = {
+                "LDEM_85S_40M": "NASA LOLA South Polar",
+                "LDEM_64_FLOAT": "NASA LOLA Global",
+                "LDEM_85N_40M": "NASA LOLA North Polar",
+            }
+
+            source = terrain.get("source")
+
+            self.terrain_source.setText(
+                source_names.get(
+                    source,
+                    source or "Unavailable",
+                )
+            )
 
         self.sun_elevation.setText(
             f'{sun["elevation"]:.2f}°'
@@ -858,6 +1081,13 @@ class AnalysisPage(QWidget):
             Image,
         )
 
+        from reportlab.graphics.shapes import (
+            Drawing,
+            Circle,
+            Line,
+            String,
+        )
+
         site = series[0].site
         start_time = series[0].time
 
@@ -1109,6 +1339,127 @@ class AnalysisPage(QWidget):
         story.append(landing_coordinates_table)
         story.append(Spacer(1, 5 * mm))
 
+        # ------------------------------------------------------------------
+        # Real LOLA Terrain Measurements
+        #
+        # These metrics come from the same AnalysisResult used for
+        # the PDF's SPICE + LOLA horizon geometry.
+        # ------------------------------------------------------------------
+
+        lola_metrics = geometry_result.terrain
+
+        if lola_metrics is None:
+            terrain_measurements_data = [
+                ["LOLA Terrain Measurement", "Value"],
+                ["DEM Elevation", "Unavailable"],
+                ["Local Slope", "Unavailable"],
+                ["Latitude", "Unavailable"],
+                ["Longitude", "Unavailable"],
+                ["LOLA Pixel", "Unavailable"],
+                ["DEM Source", "Unavailable"],
+                ["DEM Resolution", "Unavailable"],
+            ]
+        else:
+            source_names = {
+                "LDEM_85S_40M": "NASA LOLA South Polar",
+                "LDEM_64_FLOAT": "NASA LOLA Global",
+                "LDEM_85N_40M": "NASA LOLA North Polar",
+            }
+
+            source_name = source_names.get(
+                lola_metrics.source,
+                lola_metrics.source or "Unavailable",
+            )
+
+            resolution = lola_metrics.resolution_m
+
+            resolution_text = (
+                f"{resolution:.3f} m/pixel"
+                if resolution is not None
+                else "Unavailable"
+            )
+
+            terrain_measurements_data = [
+                ["LOLA Terrain Measurement", "Value"],
+                [
+                    "DEM Elevation",
+                    f"{lola_metrics.elevation_m:.3f} m",
+                ],
+                [
+                    "Local Slope",
+                    f"{lola_metrics.slope_deg:.3f}°",
+                ],
+                [
+                    "Latitude",
+                    f"{lola_metrics.latitude:.6f}°",
+                ],
+                [
+                    "Longitude",
+                    f"{lola_metrics.longitude:.6f}°",
+                ],
+                [
+                    "LOLA Pixel",
+                    f"{lola_metrics.row} × {lola_metrics.column}",
+                ],
+                [
+                    "DEM Source",
+                    source_name,
+                ],
+                [
+                    "DEM Resolution",
+                    resolution_text,
+                ],
+            ]
+
+        terrain_measurements_table = Table(
+            terrain_measurements_data,
+            colWidths=[
+                55 * mm,
+                75 * mm,
+            ],
+        )
+
+        terrain_measurements_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                    ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "LOLA Terrain Measurements",
+                styles["Heading2"],
+            )
+        )
+
+        story.append(terrain_measurements_table)
+
+        story.append(Spacer(1, 3 * mm))
+
+        story.append(
+            Paragraph(
+                "Elevation is sampled from the loaded NASA LRO/LOLA "
+                "digital elevation model. Local slope is estimated "
+                "using adjacent DEM pixels. Measurements are available "
+                "only within the loaded DEM coverage.",
+                styles["Normal"],
+            )
+        )
+
+        story.append(Spacer(1, 5 * mm))
+
         sun_geometry = geometry_result.sun
         earth_geometry = geometry_result.earth
 
@@ -1229,6 +1580,428 @@ class AnalysisPage(QWidget):
                 styles["Normal"],
             )
         )
+
+        # ------------------------------------------------------------------
+        # Visual Lunar Horizon Geometry
+        #
+        # This is a vector PDF reconstruction of the same local geometry
+        # represented by LunarGeometryView.  It uses the real SPICE-derived
+        # elevation/azimuth and the real LOLA terrain-horizon elevation from
+        # geometry_result.  No new/mock astronomical values are generated.
+        # ------------------------------------------------------------------
+
+        def pdf_geometry_point(
+            center_x,
+            center_y,
+            radius,
+            azimuth_deg,
+            elevation_deg,
+        ):
+            import math
+
+            elevation = max(
+                -90.0,
+                min(90.0, float(elevation_deg)),
+            )
+
+            # Match LunarGeometryView:
+            # 0° elevation = outer horizon
+            # 90° elevation = center/zenith
+            radial_fraction = (
+                (90.0 - max(elevation, 0.0)) / 90.0
+            )
+
+            r = radius * radial_fraction
+
+            azimuth = math.radians(float(azimuth_deg))
+
+            x = center_x + r * math.sin(azimuth)
+            y = center_y - r * math.cos(azimuth)
+
+            return x, y
+
+        def build_pdf_lunar_geometry(
+            sun_data,
+            earth_data,
+        ):
+            width = 250 * mm
+            height = 88 * mm
+
+            drawing = Drawing(width, height)
+
+            cx = 72 * mm
+            cy = 44 * mm
+            radius = 30 * mm
+
+            # White background keeps the diagram printable and matches
+            # the existing PDF report style.
+            drawing.add(
+                Circle(
+                    cx,
+                    cy,
+                    radius + 8 * mm,
+                    strokeColor=colors.HexColor("#dddddd"),
+                    fillColor=colors.white,
+                    strokeWidth=0.7,
+                )
+            )
+
+            # Horizon.
+            drawing.add(
+                Circle(
+                    cx,
+                    cy,
+                    radius,
+                    strokeColor=colors.HexColor("#555555"),
+                    fillColor=None,
+                    strokeWidth=1.0,
+                )
+            )
+
+            # 30° and 60° elevation rings.
+            ring30 = radius * (60.0 / 90.0)
+            ring60 = radius * (30.0 / 90.0)
+
+            for ring in (ring30, ring60):
+                drawing.add(
+                    Circle(
+                        cx,
+                        cy,
+                        ring,
+                        strokeColor=colors.HexColor("#aaaaaa"),
+                        fillColor=None,
+                        strokeWidth=0.5,
+                    )
+                )
+
+            # Cardinal directions.
+            drawing.add(
+                Line(
+                    cx,
+                    cy - radius,
+                    cx,
+                    cy + radius,
+                    strokeColor=colors.HexColor("#aaaaaa"),
+                    strokeWidth=0.5,
+                )
+            )
+
+            drawing.add(
+                Line(
+                    cx - radius,
+                    cy,
+                    cx + radius,
+                    cy,
+                    strokeColor=colors.HexColor("#aaaaaa"),
+                    strokeWidth=0.5,
+                )
+            )
+
+            labels = [
+                ("N", cx - 2, cy + radius + 5 * mm),
+                ("E", cx + radius + 4 * mm, cy - 1),
+                ("S", cx - 2, cy - radius - 5 * mm),
+                ("W", cx - radius - 7 * mm, cy - 1),
+            ]
+
+            for label, x, y in labels:
+                drawing.add(
+                    String(
+                        x,
+                        y,
+                        label,
+                        fontName="Helvetica-Bold",
+                        fontSize=9,
+                        fillColor=colors.HexColor("#222222"),
+                    )
+                )
+
+            # Elevation labels.
+            for label, ring, offset in (
+                ("30°", ring30, 0),
+                ("60°", ring60, 0),
+                ("90°", 0, 0),
+            ):
+                drawing.add(
+                    String(
+                        cx + 3 * mm,
+                        cy + ring + 1 * mm,
+                        label,
+                        fontName="Helvetica",
+                        fontSize=6.5,
+                        fillColor=colors.HexColor("#777777"),
+                    )
+                )
+
+            def draw_body(data, label, body_color):
+                if not data:
+                    return
+
+                elevation = data.get("elevation")
+                azimuth = data.get("azimuth")
+
+                if elevation is None or azimuth is None:
+                    return
+
+                body_x, body_y = pdf_geometry_point(
+                    cx,
+                    cy,
+                    radius,
+                    azimuth,
+                    elevation,
+                )
+
+                terrain_horizon = data.get(
+                    "terrain_horizon_elevation"
+                )
+
+                mission_visible = data.get(
+                    "terrain_visible"
+                )
+
+                if mission_visible is None:
+                    mission_visible = data.get(
+                        "visible",
+                        False,
+                    )
+
+                if terrain_horizon is not None:
+                    terrain_x, terrain_y = pdf_geometry_point(
+                        cx,
+                        cy,
+                        radius,
+                        azimuth,
+                        terrain_horizon,
+                    )
+
+                    # Terrain-horizon point.
+                    drawing.add(
+                        Circle(
+                            terrain_x,
+                            terrain_y,
+                            1.7 * mm,
+                            strokeColor=colors.HexColor("#8a5a00"),
+                            fillColor=colors.HexColor("#f4c542"),
+                            strokeWidth=0.8,
+                        )
+                    )
+
+                    # Visual terrain-clearance segment.
+                    drawing.add(
+                        Line(
+                            terrain_x,
+                            terrain_y,
+                            body_x,
+                            body_y,
+                            strokeColor=(
+                                colors.HexColor("#188038")
+                                if mission_visible
+                                else colors.HexColor("#b3261e")
+                            ),
+                            strokeWidth=1.8,
+                            strokeDashArray=(
+                                None
+                                if mission_visible
+                                else [3, 2]
+                            ),
+                        )
+                    )
+
+                drawing.add(
+                    Line(
+                        cx,
+                        cy,
+                        body_x,
+                        body_y,
+                        strokeColor=body_color,
+                        strokeWidth=1.5,
+                    )
+                )
+
+                drawing.add(
+                    Circle(
+                        body_x,
+                        body_y,
+                        2.7 * mm,
+                        strokeColor=body_color,
+                        fillColor=body_color,
+                        strokeWidth=1,
+                    )
+                )
+
+                status = (
+                    "Terrain Clear"
+                    if mission_visible
+                    else "Terrain Blocked"
+                )
+
+                label_x = body_x + 5 * mm
+                label_y = body_y + 4 * mm
+
+                drawing.add(
+                    String(
+                        label_x,
+                        label_y,
+                        label,
+                        fontName="Helvetica-Bold",
+                        fontSize=8,
+                        fillColor=body_color,
+                    )
+                )
+
+                drawing.add(
+                    String(
+                        label_x,
+                        label_y - 4 * mm,
+                        (
+                            f"Az {float(azimuth):.1f}°  "
+                            f"El {float(elevation):.1f}°"
+                        ),
+                        fontName="Helvetica",
+                        fontSize=6.5,
+                        fillColor=colors.HexColor("#333333"),
+                    )
+                )
+
+                if terrain_horizon is not None:
+                    clearance = (
+                        float(elevation)
+                        - float(terrain_horizon)
+                    )
+
+                    drawing.add(
+                        String(
+                            label_x,
+                            label_y - 8 * mm,
+                            (
+                                f"LOLA horizon {float(terrain_horizon):.1f}°  "
+                                f"clearance {clearance:+.1f}°"
+                            ),
+                            fontName="Helvetica",
+                            fontSize=6.2,
+                            fillColor=(
+                                colors.HexColor("#188038")
+                                if clearance >= 0
+                                else colors.HexColor("#b3261e")
+                            ),
+                        )
+                    )
+
+                    drawing.add(
+                        String(
+                            label_x,
+                            label_y - 12 * mm,
+                            status,
+                            fontName="Helvetica",
+                            fontSize=6.2,
+                            fillColor=(
+                                colors.HexColor("#188038")
+                                if mission_visible
+                                else colors.HexColor("#b3261e")
+                            ),
+                        )
+                    )
+
+            draw_body(
+                sun_data,
+                "SUN",
+                colors.HexColor("#d89b00"),
+            )
+
+            draw_body(
+                earth_data,
+                "EARTH",
+                colors.HexColor("#1976a3"),
+            )
+
+            # Title and explanation inside the drawing.
+            drawing.add(
+                String(
+                    118 * mm,
+                    78 * mm,
+                    "Local Lunar Horizon Geometry",
+                    fontName="Helvetica-Bold",
+                    fontSize=11,
+                    fillColor=colors.HexColor("#222222"),
+                )
+            )
+
+            drawing.add(
+                String(
+                    118 * mm,
+                    72 * mm,
+                    "SPICE direction + LOLA terrain horizon",
+                    fontName="Helvetica",
+                    fontSize=7.5,
+                    fillColor=colors.HexColor("#555555"),
+                )
+            )
+
+            drawing.add(
+                String(
+                    118 * mm,
+                    64 * mm,
+                    "Outer circle = local horizon",
+                    fontName="Helvetica",
+                    fontSize=7,
+                    fillColor=colors.HexColor("#555555"),
+                )
+            )
+
+            drawing.add(
+                String(
+                    118 * mm,
+                    59 * mm,
+                    "Center = zenith (90° elevation)",
+                    fontName="Helvetica",
+                    fontSize=7,
+                    fillColor=colors.HexColor("#555555"),
+                )
+            )
+
+            drawing.add(
+                String(
+                    118 * mm,
+                    54 * mm,
+                    "Azimuth increases clockwise from lunar north",
+                    fontName="Helvetica",
+                    fontSize=7,
+                    fillColor=colors.HexColor("#555555"),
+                )
+            )
+
+            drawing.add(
+                String(
+                    118 * mm,
+                    47 * mm,
+                    "Green segment = terrain-clearance above LOLA horizon",
+                    fontName="Helvetica",
+                    fontSize=7,
+                    fillColor=colors.HexColor("#188038"),
+                )
+            )
+
+            drawing.add(
+                String(
+                    118 * mm,
+                    42 * mm,
+                    "Red segment = terrain obstruction",
+                    fontName="Helvetica",
+                    fontSize=7,
+                    fillColor=colors.HexColor("#b3261e"),
+                )
+            )
+
+            return drawing
+
+        story.append(
+            build_pdf_lunar_geometry(
+                geometry_result.sun.__dict__,
+                geometry_result.earth.__dict__,
+            )
+        )
+
+        story.append(Spacer(1, 5 * mm))
 
         story.append(horizon_geometry_table)
         story.append(Spacer(1, 5 * mm))

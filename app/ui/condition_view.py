@@ -51,13 +51,40 @@ class LandingConditionsView(QWidget):
         label.setAlignment(
             Qt.AlignmentFlag.AlignCenter
         )
+        label.setMinimumHeight(42)
+        label.setSizePolicy(
+            label.sizePolicy().Policy.Expanding,
+            label.sizePolicy().Policy.Fixed,
+        )
         label.setStyleSheet(
             f"""
             QLabel {{
                 font-size: {font_size}px;
                 font-weight: bold;
+                color: #1f2937;
                 padding: 6px;
+                border: none;
             }}
+            """
+        )
+        return label
+
+    @staticmethod
+    def _detail_label():
+        label = QLabel("--")
+        label.setWordWrap(True)
+        label.setAlignment(
+            Qt.AlignmentFlag.AlignCenter
+        )
+        label.setMinimumHeight(28)
+        label.setStyleSheet(
+            """
+            QLabel {
+                font-size: 12px;
+                color: #5b6472;
+                padding: 3px;
+                border: none;
+            }
             """
         )
         return label

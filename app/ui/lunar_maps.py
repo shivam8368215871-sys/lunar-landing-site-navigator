@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from app.science.heatmap import calculate_visibility_heatmap
 from app.ui.heatmap_view import VisibilityHeatmapView
+from app.ui.global_terrain_view import GlobalTerrainMapView
 
 
 class LunarMapView(QLabel):
@@ -238,10 +239,10 @@ class LunarMapsWidget(QWidget):
             / "moon_surface_map.png"
         )
 
-        self.height_map = LunarMapView(
-            maps_dir
-            / "moon_height_map.png"
-        )
+        # Full-Moon elevation overview from the real global
+        # NASA LOLA DEM. The south-polar visibility heatmap
+        # remains a separate high-resolution visualization.
+        self.height_map = GlobalTerrainMapView()
 
         self.heat_map = VisibilityHeatmapView()
 
@@ -367,7 +368,7 @@ class LunarMapsWidget(QWidget):
 
         maps_layout.addWidget(
             self._panel(
-                "LOLA Height Map",
+                "Global LOLA Terrain",
                 self.height_map,
             ),
             1,
