@@ -11,9 +11,11 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QSizePolicy,
     QScrollArea,
+    QLineEdit,
 )
 
 from app.data.sites import LANDING_SITES
+from app.core.models import Site
 from app.science.engine import LunarAnalysisEngine
 
 
@@ -287,7 +289,10 @@ class ComparePage(QWidget):
         combo = QComboBox()
 
         combo.addItems(
-            list(LANDING_SITES.keys())
+            [
+                *LANDING_SITES.keys(),
+                "Custom Location",
+            ]
         )
 
         combo.setSizePolicy(
@@ -310,6 +315,52 @@ class ComparePage(QWidget):
 
         layout.addWidget(label)
         layout.addWidget(combo)
+
+        custom_widget = QWidget()
+        custom_layout = QVBoxLayout(custom_widget)
+        custom_layout.setContentsMargins(0, 4, 0, 0)
+        custom_layout.setSpacing(6)
+
+        name_label = QLabel("Location name:")
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("Custom landing location")
+
+        latitude_label = QLabel("Latitude (°):")
+        latitude_edit = QLineEdit()
+        latitude_edit.setPlaceholderText("-90 to 90")
+
+        longitude_label = QLabel("Longitude (°):")
+        longitude_edit = QLineEdit()
+        longitude_edit.setPlaceholderText("-180 to 180")
+
+        custom_layout.addWidget(name_label)
+        custom_layout.addWidget(name_edit)
+        custom_layout.addWidget(latitude_label)
+        custom_layout.addWidget(latitude_edit)
+        custom_layout.addWidget(longitude_label)
+        custom_layout.addWidget(longitude_edit)
+
+        custom_widget.setVisible(False)
+        layout.addWidget(custom_widget)
+
+        if identifier == "site_a":
+            self.site_a_combo = combo
+            self.site_a_custom_widget = custom_widget
+            self.site_a_name_edit = name_edit
+            self.site_a_latitude_edit = latitude_edit
+            self.site_a_longitude_edit = longitude_edit
+        else:
+            self.site_b_combo = combo
+            self.site_b_custom_widget = custom_widget
+            self.site_b_name_edit = name_edit
+            self.site_b_latitude_edit = latitude_edit
+            self.site_b_longitude_edit = longitude_edit
+
+        combo.currentTextChanged.connect(
+            lambda value, widget=custom_widget: (
+                widget.setVisible(value == "Custom Location")
+            )
+        )
 
         return group
 
@@ -340,6 +391,74 @@ class ComparePage(QWidget):
             }
         """)
 
+    def _resolve_selected_site(self, identifier):
+        """Return a predefined or custom Site for a Compare selector."""
+
+        if identifier == "site_a":
+            combo = self.site_a_combo
+            name_edit = self.site_a_name_edit
+            latitude_edit = self.site_a_latitude_edit
+            longitude_edit = self.site_a_longitude_edit
+        else:
+            combo = self.site_b_combo
+            name_edit = self.site_b_name_edit
+            latitude_edit = self.site_b_latitude_edit
+            longitude_edit = self.site_b_longitude_edit
+
+        selected_name = combo.currentText()
+
+        if selected_name != "Custom Location":
+            return LANDING_SITES[selected_name]
+
+        location_name = name_edit.text().strip()
+        latitude_text = latitude_edit.text().strip()
+        longitude_text = longitude_edit.text().strip()
+
+        if not location_name:
+            self.status_label.setText(
+                f"{'Site A' if identifier == 'site_a' else 'Site B'}: "
+                "enter a location name."
+            )
+            return None
+
+        try:
+            latitude = float(latitude_text)
+        except ValueError:
+            self.status_label.setText(
+                f"{'Site A' if identifier == 'site_a' else 'Site B'}: "
+                "latitude must be a valid number."
+            )
+            return None
+
+        try:
+            longitude = float(longitude_text)
+        except ValueError:
+            self.status_label.setText(
+                f"{'Site A' if identifier == 'site_a' else 'Site B'}: "
+                "longitude must be a valid number."
+            )
+            return None
+
+        if not -90.0 <= latitude <= 90.0:
+            self.status_label.setText(
+                f"{'Site A' if identifier == 'site_a' else 'Site B'}: "
+                "latitude must be between -90° and 90°."
+            )
+            return None
+
+        if not -180.0 <= longitude <= 180.0:
+            self.status_label.setText(
+                f"{'Site A' if identifier == 'site_a' else 'Site B'}: "
+                "longitude must be between -180° and 180°."
+            )
+            return None
+
+        return Site(
+            name=location_name,
+            latitude=latitude,
+            longitude=longitude,
+        )
+
     def update_comparison(self):
 
         site_a_name = (
@@ -350,13 +469,16 @@ class ComparePage(QWidget):
             self.site_b_combo.currentText()
         )
 
-        site_a = LANDING_SITES[
-            site_a_name
-        ]
+        site_a = self._resolve_selected_site(
+            "site_a",
+        )
 
-        site_b = LANDING_SITES[
-            site_b_name
-        ]
+        site_b = self._resolve_selected_site(
+            "site_b",
+        )
+
+        if site_a is None or site_b is None:
+            return
 
         if self.analysis_time is None:
             analysis_time = datetime.now(
