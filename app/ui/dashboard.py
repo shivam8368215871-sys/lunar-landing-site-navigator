@@ -795,6 +795,15 @@ class Dashboard(QWidget):
     # ANALYSIS
     # =============================================================
 
+    def get_analysis_time(self):
+        """Return the timestamp from the existing UTC controls."""
+        return datetime.strptime(
+            self.date_control.text().strip()
+            + " "
+            + self.time_control.text().strip(),
+            "%Y-%m-%d %H:%M:%S",
+        ).replace(tzinfo=timezone.utc)
+
     def run_analysis(self):
         site = self.get_selected_site()
 

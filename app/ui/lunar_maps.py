@@ -9,7 +9,12 @@ from PySide6.QtWidgets import (
     QLabel,
     QFrame,
     QSizePolicy,
+    QComboBox,
+    QPushButton,
 )
+
+from app.science.heatmap import calculate_visibility_heatmap
+from app.ui.heatmap_view import VisibilityHeatmapView
 
 
 class LunarMapView(QLabel):
@@ -214,8 +219,11 @@ class LunarMapsWidget(QWidget):
     in the next step.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, engine=None, time_provider=None, parent=None):
         super().__init__(parent)
+
+        self.engine = engine
+        self.time_provider = time_provider
 
         root = Path(__file__).resolve().parents[2]
 
@@ -235,9 +243,51 @@ class LunarMapsWidget(QWidget):
             / "moon_height_map.png"
         )
 
-        self.heat_map = self._create_placeholder(
-            "Landing Analysis\nHeat Map"
+        self.heat_map = VisibilityHeatmapView()
+
+        self.heatmap_target = QComboBox()
+        self.heatmap_target.addItems(["Sun", "Earth"])
+        self.heatmap_target.currentTextChanged.connect(
+            self._on_heatmap_target_changed
         )
+
+        self.heatmap_generate_button = QPushButton(
+            "Generate / Refresh"
+        )
+        self.heatmap_generate_button.clicked.connect(
+            self.generate_heatmap
+        )
+
+        self.heatmap_status = QLabel(
+            "Select Sun or Earth, then generate the map."
+        )
+        self.heatmap_status.setWordWrap(True)
+        self.heatmap_status.setStyleSheet(
+            "color: #b9c3d0; font-size: 11px; border: none;"
+        )
+
+        self.heatmap_content = QWidget()
+        heatmap_layout = QVBoxLayout(self.heatmap_content)
+        heatmap_layout.setContentsMargins(0, 0, 0, 0)
+        heatmap_layout.setSpacing(5)
+
+        controls = QHBoxLayout()
+        controls.addWidget(QLabel("Target:"))
+        controls.addWidget(self.heatmap_target, 1)
+        controls.addWidget(self.heatmap_generate_button)
+        heatmap_layout.addLayout(controls)
+        heatmap_layout.addWidget(self.heat_map, 1)
+
+        legend = QLabel(
+            "<span style='color:#28be69'>●</span> Visible  "
+            "<span style='color:#e14646'>●</span> Blocked  "
+            "<span style='color:#828c9b'>●</span> Unavailable"
+        )
+        legend.setStyleSheet(
+            "font-size: 11px; border: none;"
+        )
+        heatmap_layout.addWidget(legend)
+        heatmap_layout.addWidget(self.heatmap_status)
 
         self._setup_ui()
 
@@ -325,8 +375,8 @@ class LunarMapsWidget(QWidget):
 
         maps_layout.addWidget(
             self._panel(
-                "Analysis Heat Map",
-                self.heat_map,
+                "Sun / Earth Terrain Visibility",
+                self.heatmap_content,
             ),
             1,
         )
@@ -349,6 +399,70 @@ class LunarMapsWidget(QWidget):
         main_layout.addWidget(
             self.location_label
         )
+
+    def _on_heatmap_target_changed(self, value):
+        target = "sun" if value == "Sun" else "earth"
+        self.heat_map.set_target(target)
+        self._update_heatmap_status()
+
+    def _update_heatmap_status(self):
+        result = self.heat_map.result
+        if result is None:
+            return
+
+        visible = 0
+        blocked = 0
+        unavailable = 0
+
+        for cell in result.cells:
+            value = getattr(
+                cell,
+                f"{self.heat_map.target}_visible",
+            )
+            if value is True:
+                visible += 1
+            elif value is False:
+                blocked += 1
+            else:
+                unavailable += 1
+
+        self.heatmap_status.setText(
+            f"UTC: {result.analysis_time:%Y-%m-%d %H:%M:%S} | "
+            f"Visible: {visible} | Blocked: {blocked} | "
+            f"Unavailable: {unavailable}"
+        )
+
+    def generate_heatmap(self):
+        """Calculate a real visibility grid using the shared engine."""
+        if self.engine is None or self.time_provider is None:
+            self.heatmap_status.setText(
+                "Heatmap engine or UTC time provider is unavailable."
+            )
+            return
+
+        self.heatmap_generate_button.setEnabled(False)
+        self.heatmap_status.setText(
+            "Calculating real SPICE and LOLA visibility..."
+        )
+
+        try:
+            analysis_time = self.time_provider()
+            result = calculate_visibility_heatmap(
+                engine=self.engine,
+                analysis_time=analysis_time,
+                grid_size=32,
+            )
+
+            self.heat_map.set_result(result)
+
+            self._update_heatmap_status()
+
+        except Exception as exc:
+            self.heatmap_status.setText(
+                f"Heatmap calculation failed: {exc}"
+            )
+        finally:
+            self.heatmap_generate_button.setEnabled(True)
 
     def _panel(self, title, widget):
         frame = QFrame()
@@ -397,6 +511,10 @@ class LunarMapsWidget(QWidget):
             latitude,
             longitude,
         )
+        self.heat_map.set_location(
+            latitude,
+            longitude,
+        )
 
         self.location_label.setText(
             f"Selected location: "
@@ -407,6 +525,7 @@ class LunarMapsWidget(QWidget):
     def clear_location(self):
         self.surface_map.clear_location()
         self.height_map.clear_location()
+        self.heat_map.clear_location()
 
         self.location_label.setText(
             "Selected location: --"

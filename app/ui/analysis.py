@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
 
 from app.core.models import Site
 from app.ui.time_series_plot import LunarTimeSeriesPlot
+from app.ui.geometry_view import LunarGeometryView
+from app.ui.condition_view import LandingConditionsView
 
 
 class AnalysisPage(QWidget):
@@ -251,6 +253,80 @@ class AnalysisPage(QWidget):
         )
 
         # --------------------------------------------------
+        # Local Lunar Horizon Geometry
+        # --------------------------------------------------
+
+        geometry_group = QGroupBox(
+            "Local Lunar Horizon Geometry"
+        )
+
+        geometry_layout = QVBoxLayout()
+
+        geometry_description = QLabel(
+            "Real SPICE-derived Sun/Earth direction at the "
+            "selected lunar site. The diagram shows local "
+            "azimuth and elevation; terrain visibility uses "
+            "the existing LOLA horizon calculation."
+        )
+
+        geometry_description.setWordWrap(True)
+
+        geometry_layout.addWidget(
+            geometry_description
+        )
+
+        self.geometry_view = LunarGeometryView()
+
+        geometry_layout.addWidget(
+            self.geometry_view
+        )
+
+        geometry_group.setLayout(
+            geometry_layout
+        )
+
+        main_layout.addWidget(
+            geometry_group
+        )
+
+        # --------------------------------------------------
+        # Landing Conditions
+        # --------------------------------------------------
+
+        conditions_group = QGroupBox(
+            "Landing Conditions"
+        )
+
+        conditions_layout = QVBoxLayout()
+
+        conditions_description = QLabel(
+            "Real terrain-aware mission conditions calculated "
+            "from the selected timeline using SPICE and LOLA."
+        )
+
+        conditions_description.setWordWrap(True)
+
+        conditions_layout.addWidget(
+            conditions_description
+        )
+
+        self.landing_conditions_view = (
+            LandingConditionsView()
+        )
+
+        conditions_layout.addWidget(
+            self.landing_conditions_view
+        )
+
+        conditions_group.setLayout(
+            conditions_layout
+        )
+
+        main_layout.addWidget(
+            conditions_group
+        )
+
+        # --------------------------------------------------
         # Analysis status
         # --------------------------------------------------
 
@@ -381,7 +457,7 @@ class AnalysisPage(QWidget):
         )
 
         self.longest_dark_period_label = QLabel(
-            "Longest Dark Period (sampled): --"
+            "Longest Dark Period: --"
         )
 
         self.contact_hours_label = QLabel(
@@ -393,7 +469,7 @@ class AnalysisPage(QWidget):
         )
 
         self.longest_blackout_label = QLabel(
-            "Longest Earth Blackout (sampled): --"
+            "Longest Earth Blackout: --"
         )
 
         self.suitability_score_label = QLabel(
@@ -594,6 +670,11 @@ class AnalysisPage(QWidget):
             f'Analysis time: {results["time"].strftime("%Y-%m-%d %H:%M:%S UTC")}.'
         )
 
+        self.geometry_view.set_geometry(
+            sun,
+            earth,
+        )
+
         self._current_analysis_results = results
         self.update_time_series(results)
 
@@ -777,15 +858,35 @@ class AnalysisPage(QWidget):
             Image,
         )
 
+        site = series[0].site
+        start_time = series[0].time
+
+        duration_hours = (
+            series[-1].time - start_time
+        ).total_seconds() / 3600.0
+
+        # Keep the selected display timeline for the PDF graph/table.
+        # Mission metrics and suitability use a full lunar-month
+        # assessment window so a short display window cannot inflate
+        # the mission score.
+        mission_duration_hours = 29.5 * 24.0
+
+        metric_series = self.engine.analyze_time_series(
+            site=site,
+            start_time=start_time,
+            duration_hours=mission_duration_hours,
+            step_hours=1.0,
+        )
+
         lighting_metrics = (
             self.engine.calculate_lighting_metrics(
-                series
+                metric_series
             )
         )
 
         communications_metrics = (
             self.engine.calculate_communications_metrics(
-                series
+                metric_series
             )
         )
 
@@ -793,18 +894,55 @@ class AnalysisPage(QWidget):
             self.engine.calculate_suitability_score(
                 lighting_metrics=lighting_metrics,
                 communications_metrics=communications_metrics,
+                mission_hours=mission_duration_hours,
             )
         )
 
         next_events = (
-            self.engine.calculate_next_events(series)
+            self.engine.calculate_next_events_extended(
+                site=site,
+                start_time=start_time,
+                initial_results=metric_series,
+            )
         )
 
-        site = series[0].site
+        # Report every terrain-aware Sun/Earth visibility transition
+        # across the complete 29.5-day assessment window.
+        # Transition times are refined by the engine from real
+        # SPICE + LOLA evaluations; no interpolation is used here.
+        visibility_events = self.engine.calculate_visibility_events(
+            metric_series,
+            site=site,
+        )
 
-        duration_hours = (
-            series[-1].time - series[0].time
-        ).total_seconds() / 3600.0
+        terrain_available = any(
+            result.sun.terrain_horizon_elevation is not None
+            or result.earth.terrain_horizon_elevation is not None
+            for result in series
+        )
+
+        if terrain_available:
+            terrain_status_text = (
+                "LOLA terrain available; terrain-aware visibility applied."
+            )
+            suitability_score_text = (
+                f"{suitability['score']:.2f}/100"
+            )
+            sun_mission_header = "Sun Mission"
+            earth_mission_header = "Earth Mission"
+        else:
+            terrain_status_text = (
+                "Terrain horizon mask unavailable for this location. "
+                "Visibility is geometric only. "
+                "Terrain masks available for: Shackleton Crater, "
+                "Cabeus Crater, Malapert Massif."
+            )
+            suitability_score_text = (
+                f"{suitability['score']:.2f}/100 "
+                "(provisional — no terrain data)"
+            )
+            sun_mission_header = "Sun Mission (geometric)"
+            earth_mission_header = "Earth Mission (geometric)"
 
         sampling_hours = (
             (series[1].time - series[0].time).total_seconds()
@@ -850,22 +988,31 @@ class AnalysisPage(QWidget):
                 f"{site.longitude:.4f}°",
             ],
             [
-                "Timeline",
+                "Timeline view",
                 f"{series[0].time.strftime('%Y-%m-%d %H:%M UTC')} "
                 f"to "
-                f"{series[-1].time.strftime('%Y-%m-%d %H:%M UTC')}",
+                f"{series[-1].time.strftime('%Y-%m-%d %H:%M UTC')} "
+                f"({duration_hours:.0f} hours)",
             ],
             [
-                "Duration",
-                f"{duration_hours:.2f} hours",
-            ],
-            [
-                "Sampling",
+                "Display sampling",
                 f"{sampling_hours:.2f} hours",
             ],
             [
-                "Samples",
+                "Display samples",
                 str(len(series)),
+            ],
+            [
+                "Metrics window",
+                f"29.5 days ({mission_duration_hours:.0f} hours)",
+            ],
+            [
+                "Metrics sampling",
+                "1.00 hour",
+            ],
+            [
+                "Metrics samples",
+                str(len(metric_series)),
             ],
         ]
 
@@ -895,6 +1042,211 @@ class AnalysisPage(QWidget):
         story.append(summary_table)
         story.append(Spacer(1, 6 * mm))
 
+        # ------------------------------------------------------------------
+        # Landing Site Coordinates + Lunar Horizon Geometry
+        #
+        # Geometry is taken directly from the first real SPICE + LOLA
+        # AnalysisResult in the selected timeline.  No separate/mock
+        # astronomical values are generated for the PDF.
+        # ------------------------------------------------------------------
+
+        geometry_result = series[0]
+
+        from app.data.sites import LANDING_SITE_HEIGHTS_KM
+
+        site_height_km = LANDING_SITE_HEIGHTS_KM.get(
+            site.name,
+            None,
+        )
+
+        landing_coordinates_data = [
+            ["Parameter", "Value"],
+            ["Landing Site", site.name],
+            [
+                "Latitude",
+                f"{site.latitude:.6f}°",
+            ],
+            [
+                "Longitude",
+                f"{site.longitude:.6f}°",
+            ],
+            [
+                "Site Elevation",
+                (
+                    f"{site_height_km:.6f} km"
+                    if site_height_km is not None
+                    else "Unavailable"
+                ),
+            ],
+        ]
+
+        landing_coordinates_table = Table(
+            landing_coordinates_data,
+            colWidths=[55 * mm, 75 * mm],
+        )
+
+        landing_coordinates_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                    ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "Landing Site Coordinates",
+                styles["Heading2"],
+            )
+        )
+
+        story.append(landing_coordinates_table)
+        story.append(Spacer(1, 5 * mm))
+
+        sun_geometry = geometry_result.sun
+        earth_geometry = geometry_result.earth
+
+        def terrain_clearance(result):
+            if result.terrain_horizon_elevation is None:
+                return None
+
+            return (
+                result.elevation
+                - result.terrain_horizon_elevation
+            )
+
+        def visibility_text(result):
+            mission_visible = result.mission_visible
+
+            if result.terrain_visible is not None:
+                return (
+                    "Visible"
+                    if mission_visible
+                    else "Blocked by terrain"
+                )
+
+            return (
+                "Visible"
+                if mission_visible
+                else "Below geometric horizon"
+            )
+
+        sun_clearance = terrain_clearance(sun_geometry)
+        earth_clearance = terrain_clearance(earth_geometry)
+
+        horizon_geometry_data = [
+            [
+                "Body",
+                "Azimuth (°)",
+                "Elevation (°)",
+                "LOLA Horizon (°)",
+                "Clearance (°)",
+                "Mission Visibility",
+            ],
+            [
+                "Sun",
+                f"{sun_geometry.azimuth:.4f}",
+                f"{sun_geometry.elevation:.4f}",
+                (
+                    f"{sun_geometry.terrain_horizon_elevation:.4f}"
+                    if sun_geometry.terrain_horizon_elevation is not None
+                    else "Unavailable"
+                ),
+                (
+                    f"{sun_clearance:.4f}"
+                    if sun_clearance is not None
+                    else "Unavailable"
+                ),
+                visibility_text(sun_geometry),
+            ],
+            [
+                "Earth",
+                f"{earth_geometry.azimuth:.4f}",
+                f"{earth_geometry.elevation:.4f}",
+                (
+                    f"{earth_geometry.terrain_horizon_elevation:.4f}"
+                    if earth_geometry.terrain_horizon_elevation is not None
+                    else "Unavailable"
+                ),
+                (
+                    f"{earth_clearance:.4f}"
+                    if earth_clearance is not None
+                    else "Unavailable"
+                ),
+                visibility_text(earth_geometry),
+            ],
+        ]
+
+        horizon_geometry_table = Table(
+            horizon_geometry_data,
+            repeatRows=1,
+            colWidths=[
+                22 * mm,
+                27 * mm,
+                27 * mm,
+                32 * mm,
+                30 * mm,
+                48 * mm,
+            ],
+        )
+
+        horizon_geometry_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                    ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 7),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (1, 1), (-2, -1), "CENTER"),
+                ]
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "Lunar Horizon Geometry",
+                styles["Heading2"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "The geometry below is taken from the first real "
+                "SPICE + LOLA timeline sample at "
+                f"{geometry_result.time.strftime('%Y-%m-%d %H:%M:%S UTC')}. "
+                "Azimuth is measured clockwise from lunar north. "
+                "Terrain clearance is the SPICE-derived body-center "
+                "elevation minus the LOLA terrain-horizon elevation "
+                "at the body's computed azimuth.",
+                styles["Normal"],
+            )
+        )
+
+        story.append(horizon_geometry_table)
+        story.append(Spacer(1, 5 * mm))
+
+        story.append(
+            Paragraph(
+                "A positive terrain clearance indicates that the "
+                "body center is above the modeled local terrain "
+                "horizon at that azimuth. A negative clearance "
+                "indicates terrain obstruction. This is a "
+                "terrain-aware geometric model and does not apply "
+                "lunar-limb, atmospheric, or refraction corrections.",
+                styles["Normal"],
+            )
+        )
+
+        story.append(Spacer(1, 6 * mm))
+
         metrics_data = [
             ["Metric", "Value"],
             [
@@ -902,24 +1254,25 @@ class AnalysisPage(QWidget):
                 f"{lighting_metrics['illumination_percent']:.2f}%",
             ],
             [
-                "Longest Dark Period (sampled)",
-                f"{lighting_metrics['longest_dark_hours']:.2f} hours",
+                "Longest Dark Period",
+                f"{lighting_metrics['longest_dark_hours']:.0f} h (±1 h)",
             ],
             [
                 "Earth Contact",
-                f"{communications_metrics['contact_hours']:.2f} hours",
+                f"{communications_metrics['contact_hours']:.0f} h (±1 h)",
             ],
             [
                 "Earth Contact Percentage",
                 f"{communications_metrics['contact_percent']:.2f}%",
             ],
             [
-                "Longest Earth Blackout (sampled)",
-                f"{communications_metrics['longest_blackout_hours']:.2f} hours",
+                "Longest Earth Blackout",
+                f"{communications_metrics['longest_blackout_hours']:.0f} h "
+                f"(±1 h)",
             ],
             [
                 "Suitability Score",
-                f"{suitability['score']:.2f}/100",
+                suitability_score_text,
             ],
             [
                 "Illumination Points",
@@ -962,46 +1315,47 @@ class AnalysisPage(QWidget):
         story.append(metrics_table)
         story.append(Spacer(1, 6 * mm))
 
-        def event_text(event_key, time_key, countdown_key):
-            event = next_events[event_key]
-            event_time = next_events[time_key]
-            countdown = next_events[countdown_key]
-
-            if (
-                event is None
-                or event_time is None
-                or countdown is None
-            ):
-                return "None in selected timeline"
-
-            return (
-                f"{event} in {countdown:.2f} hours "
-                f"({event_time.strftime('%Y-%m-%d %H:%M UTC')})"
-            )
-
         events_data = [
-            ["Upcoming Event", "Prediction"],
             [
-                "Next Sun Event",
-                event_text(
-                    "next_sun_event",
-                    "next_sun_event_time",
-                    "next_sun_countdown_hours",
-                ),
-            ],
-            [
-                "Next Earth Event",
-                event_text(
-                    "next_earth_event",
-                    "next_earth_event_time",
-                    "next_earth_countdown_hours",
-                ),
-            ],
+                "UTC",
+                "Body",
+                "Event",
+                "Hours from assessment start",
+            ]
         ]
+
+        if visibility_events:
+            for event in visibility_events:
+                events_data.append(
+                    [
+                        event["time"].strftime(
+                            "%Y-%m-%d %H:%M:%S UTC"
+                        ),
+                        str(event["body"]),
+                        str(event["event"]),
+                        f"{event['hours_from_start']:.0f} h "
+                        f"(±1 h sample bracket)",
+                    ]
+                )
+        else:
+            events_data.append(
+                [
+                    "—",
+                    "—",
+                    "No terrain-aware visibility transitions",
+                    "—",
+                ]
+            )
 
         events_table = Table(
             events_data,
-            colWidths=[50 * mm, 120 * mm],
+            repeatRows=1,
+            colWidths=[
+                48 * mm,
+                25 * mm,
+                65 * mm,
+                42 * mm,
+            ],
         )
 
         events_table.setStyle(
@@ -1011,19 +1365,75 @@ class AnalysisPage(QWidget):
                     ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
                     ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("FONTSIZE", (0, 0), (-1, -1), 7),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (1, 1), (-1, -1), "CENTER"),
                 ]
             )
         )
 
         story.append(
             Paragraph(
-                "Next Mission Events",
+                "Mission Events — 29.5-Day Assessment Window",
                 styles["Heading2"],
             )
         )
+
+        story.append(
+            Paragraph(
+                "Events are detected from terrain-aware mission visibility "
+                "transitions in the hourly real SPICE + LOLA assessment "
+                "series. Transition times are refined from the surrounding "
+                "hourly bracket using repeated real SPICE evaluations; "
+                "no interpolated or mocked astronomical values are used.",
+                styles["Normal"],
+            )
+        )
+
         story.append(events_table)
+        story.append(Spacer(1, 6 * mm))
+
+        story.append(
+            Paragraph(
+                "Suitability Method",
+                styles["Heading2"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "Suitability = 40% illumination + 35% Earth contact "
+                "+ 25% darkness. Darkness contribution is based on "
+                "1 − (longest dark period / 708-hour metrics window), "
+                "bounded to the range 0–1. The assessment window is "
+                "29.5 days and is sampled at 1-hour intervals.",
+                styles["Normal"],
+            )
+        )
+
+        story.append(Spacer(1, 4 * mm))
+
+        story.append(
+            Paragraph(
+                "Terrain-Aware Visibility Model",
+                styles["Heading2"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "Mission visibility compares the SPICE-derived "
+                "body-center elevation with the LOLA terrain horizon "
+                "elevation at the body's computed azimuth. No lunar "
+                "limb correction or atmospheric/refraction correction "
+                "is applied. Therefore, a body center can remain "
+                "geometrically above 0° while being blocked by terrain, "
+                "or can be visible with a center below 0° where the "
+                "terrain horizon is lower.",
+                styles["Normal"],
+            )
+        )
+
         story.append(Spacer(1, 6 * mm))
 
         # Generate the real mission timeline graph from the same
@@ -1089,21 +1499,33 @@ class AnalysisPage(QWidget):
             linewidth=1.8,
         )
 
-        axis.plot(
-            timeline_times,
-            sun_horizon,
-            label="Sun Terrain Horizon",
-            linestyle="--",
-            linewidth=1.3,
+        has_sun_horizon = any(
+            result.sun.terrain_horizon_elevation is not None
+            for result in series
         )
 
-        axis.plot(
-            timeline_times,
-            earth_horizon,
-            label="Earth Terrain Horizon",
-            linestyle="--",
-            linewidth=1.3,
+        has_earth_horizon = any(
+            result.earth.terrain_horizon_elevation is not None
+            for result in series
         )
+
+        if has_sun_horizon:
+            axis.plot(
+                timeline_times,
+                sun_horizon,
+                label="Sun Terrain Horizon",
+                linestyle="--",
+                linewidth=1.3,
+            )
+
+        if has_earth_horizon:
+            axis.plot(
+                timeline_times,
+                earth_horizon,
+                label="Earth Terrain Horizon",
+                linestyle="--",
+                linewidth=1.3,
+            )
 
         axis.axhline(
             0.0,
@@ -1113,7 +1535,9 @@ class AnalysisPage(QWidget):
         )
 
         axis.set_title(
-            f"{site.name} — Real Lunar Mission Timeline"
+            f"{site.name} — "
+            f"{site.latitude:.4f}°, {site.longitude:.4f}° — "
+            f"Real Lunar Mission Timeline ({duration_hours:.0f}-Hour View)"
         )
 
         axis.set_xlabel("UTC Time")
@@ -1134,8 +1558,19 @@ class AnalysisPage(QWidget):
 
         story.append(
             Paragraph(
-                "Mission Timeline Graph",
+                f"Mission Timeline Graph — {duration_hours:.0f}-Hour Display View",
                 styles["Heading2"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "The graph uses the selected display timeline "
+                f"({duration_hours:.0f} hours at {sampling_hours:.2f}-hour "
+                "sampling). Mission metrics and visibility events are "
+                "calculated independently over the full 29.5-day "
+                "assessment window at 1-hour sampling.",
+                styles["Normal"],
             )
         )
 
@@ -1159,26 +1594,26 @@ class AnalysisPage(QWidget):
         timeline_data = [
             [
                 "UTC",
-                "Sun Elev",
-                "Sun Az",
-                "Sun Horizon",
-                "Sun Mission",
-                "Earth Elev",
-                "Earth Az",
-                "Earth Horizon",
-                "Earth Mission",
+                "Sun Elevation (°)",
+                "Sun Azimuth (°)",
+                "Sun Horizon (°)",
+                sun_mission_header,
+                "Earth Elevation (°)",
+                "Earth Azimuth (°)",
+                "Earth Horizon (°)",
+                earth_mission_header,
             ]
         ]
 
         for result in series:
             sun_horizon = (
-                ""
+                "Unavailable"
                 if result.sun.terrain_horizon_elevation is None
                 else f"{result.sun.terrain_horizon_elevation:.2f}"
             )
 
             earth_horizon = (
-                ""
+                "Unavailable"
                 if result.earth.terrain_horizon_elevation is None
                 else f"{result.earth.terrain_horizon_elevation:.2f}"
             )
@@ -1189,15 +1624,19 @@ class AnalysisPage(QWidget):
                     f"{result.sun.elevation:.2f}",
                     f"{result.sun.azimuth:.2f}",
                     sun_horizon,
-                    "VISIBLE"
-                    if result.sun.mission_visible
-                    else "BLOCKED",
+                    (
+                        "VISIBLE"
+                        if result.sun.mission_visible
+                        else "BLOCKED"
+                    ),
                     f"{result.earth.elevation:.2f}",
                     f"{result.earth.azimuth:.2f}",
                     earth_horizon,
-                    "VISIBLE"
-                    if result.earth.mission_visible
-                    else "BLOCKED",
+                    (
+                        "VISIBLE"
+                        if result.earth.mission_visible
+                        else "BLOCKED"
+                    ),
                 ]
             )
 
@@ -1242,8 +1681,11 @@ class AnalysisPage(QWidget):
 
         story.append(
             Paragraph(
-                "Science source: real SPICE ephemeris calculations "
-                "combined with LOLA terrain-aware visibility.",
+                f"Science source: real SPICE ephemeris calculations. "
+                f"{terrain_status_text} "
+                "The graph and timeline table use the display timeline; "
+                "suitability metrics and mission-event assessment use "
+                "the separate 29.5-day (708-hour), 1-hour series.",
                 styles["Normal"],
             )
         )
@@ -1286,6 +1728,7 @@ class AnalysisPage(QWidget):
             self.timeline_sampling_combo.currentData()
         )
 
+        # Keep the user-selected timeline for the graph/table.
         series = self.engine.analyze_time_series(
             site=site,
             start_time=start_time,
@@ -1294,6 +1737,15 @@ class AnalysisPage(QWidget):
         )
 
         self._current_timeline_series = series
+
+        # Calculate mission metrics at hourly resolution so their
+        # precision is independent of the display sampling interval.
+        metric_series = self.engine.analyze_time_series(
+            site=site,
+            start_time=start_time,
+            duration_hours=duration_hours,
+            step_hours=1.0,
+        )
 
         duration_text = (
             self.timeline_duration_combo.currentText()
@@ -1316,7 +1768,7 @@ class AnalysisPage(QWidget):
 
         lighting_metrics = (
             self.engine.calculate_lighting_metrics(
-                series
+                metric_series
             )
         )
 
@@ -1326,13 +1778,13 @@ class AnalysisPage(QWidget):
         )
 
         self.longest_dark_period_label.setText(
-            f"Longest Dark Period (sampled): "
+            f"Longest Dark Period: "
             f"{lighting_metrics['longest_dark_hours']:.2f} hours"
         )
 
         communications_metrics = (
             self.engine.calculate_communications_metrics(
-                series
+                metric_series
             )
         )
 
@@ -1347,7 +1799,7 @@ class AnalysisPage(QWidget):
         )
 
         self.longest_blackout_label.setText(
-            f"Longest Earth Blackout (sampled): "
+            f"Longest Earth Blackout: "
             f"{communications_metrics['longest_blackout_hours']:.2f} hours"
         )
 
@@ -1371,7 +1823,18 @@ class AnalysisPage(QWidget):
         )
 
         next_events = (
-            self.engine.calculate_next_events(series)
+            self.engine.calculate_next_events_extended(
+                site=site,
+                start_time=start_time,
+                initial_results=metric_series,
+            )
+        )
+
+        self.landing_conditions_view.set_metrics(
+            lighting_metrics=lighting_metrics,
+            communications_metrics=communications_metrics,
+            suitability=suitability,
+            next_events=next_events,
         )
 
         sun_event = next_events["next_sun_event"]
@@ -1390,7 +1853,8 @@ class AnalysisPage(QWidget):
             )
         else:
             self.next_sun_event_label.setText(
-                "Next Sun Event: None in selected timeline"
+                "Next Sun Event: None found in the "
+                "extended search window"
             )
 
         earth_event = next_events["next_earth_event"]
@@ -1409,7 +1873,8 @@ class AnalysisPage(QWidget):
             )
         else:
             self.next_earth_event_label.setText(
-                "Next Earth Event: None in selected timeline"
+                "Next Earth Event: None found in the "
+                "extended search window"
             )
 
         self.timeline_status.setText(

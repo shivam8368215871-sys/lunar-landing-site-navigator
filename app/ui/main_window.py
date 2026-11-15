@@ -59,7 +59,10 @@ class MainWindow(QMainWindow):
 
         self.dashboard_page = Dashboard()
 
-        self.sites_page = SitesPage()
+        self.sites_page = SitesPage(
+            engine=self.dashboard_page.engine,
+            time_provider=self.dashboard_page.get_analysis_time,
+        )
 
         self.analysis_page = AnalysisPage(
             engine=self.dashboard_page.engine

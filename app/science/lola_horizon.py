@@ -62,9 +62,16 @@ class LOLAHorizonCalculator:
             longitude,
         )
 
+        # LOLATerrain.sample() rounds projected coordinates
+        # before indexing the raster. Apply the same rule here
+        # so a value such as 7583.996 is not incorrectly
+        # accepted and then rounded to the invalid index 7584.
+        row = int(round(row_float))
+        column = int(round(column_float))
+
         return (
-            0.0 <= row_float < self.terrain.ROWS
-            and 0.0 <= column_float < self.terrain.COLUMNS
+            0 <= row < self.terrain.ROWS
+            and 0 <= column < self.terrain.COLUMNS
         )
 
     @staticmethod

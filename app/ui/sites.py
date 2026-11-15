@@ -22,9 +22,11 @@ class SitesPage(QWidget):
 
     site_changed = Signal(object)
 
-    def __init__(self):
+    def __init__(self, engine=None, time_provider=None):
         super().__init__()
 
+        self.engine = engine
+        self.time_provider = time_provider
         self.setup_ui()
 
     def setup_ui(self):
@@ -142,7 +144,10 @@ class SitesPage(QWidget):
         # Lunar Maps
         # --------------------------------------------------
 
-        self.lunar_maps = LunarMapsWidget()
+        self.lunar_maps = LunarMapsWidget(
+            engine=self.engine,
+            time_provider=self.time_provider,
+        )
 
         main_layout.addWidget(
             self.lunar_maps,
