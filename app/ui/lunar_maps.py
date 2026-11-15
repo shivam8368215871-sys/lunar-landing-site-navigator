@@ -60,11 +60,13 @@ class LunarMapView(QLabel):
 
     def _coordinate_to_pixel(self):
         """
-        Convert south-polar coordinates to normalized image
-        coordinates.
+        Convert lunar coordinates to normalized coordinates matching
+        the full 7584x7584 LOLA south-polar raster.
 
-        This is currently based on the south-polar stereographic
-        convention used by the project.
+        The LOLA DEM uses 40 m pixels with the south pole at the
+        raster center.  The PNG height map is generated directly
+        from this complete raster, so the marker must use the same
+        raster coordinates.
         """
 
         if (
@@ -78,10 +80,14 @@ class LunarMapView(QLabel):
         lat = float(self.latitude)
         lon = float(self.longitude)
 
-        if not -90.0 <= lat <= -80.0:
+        if not -90.0 <= lat <= -85.0:
             return None
 
+        # LOLA LDEM_85S_40M raster geometry from the PDS label.
         R = 1737.4
+        PIXEL_SIZE_KM = 0.04
+        RASTER_SIZE = 7584
+        CENTER = 3791.5
 
         phi = math.radians(lat)
         lam = math.radians(lon)
@@ -95,20 +101,16 @@ class LunarMapView(QLabel):
             )
         )
 
-        max_rho = (
-            2.0
-            * R
-            * math.tan(
-                math.pi / 4.0
-                + math.radians(-80.0) / 2.0
-            )
-        )
-
         x = rho * math.sin(lam)
         y = -rho * math.cos(lam)
 
-        nx = 0.5 + x / (2.0 * max_rho)
-        ny = 0.5 + y / (2.0 * max_rho)
+        # Convert projected south-polar coordinates to the
+        # actual LOLA raster sample/line coordinates.
+        sample = CENTER + x / PIXEL_SIZE_KM
+        line = CENTER + y / PIXEL_SIZE_KM
+
+        nx = sample / (RASTER_SIZE - 1)
+        ny = line / (RASTER_SIZE - 1)
 
         nx = max(0.0, min(1.0, nx))
         ny = max(0.0, min(1.0, ny))

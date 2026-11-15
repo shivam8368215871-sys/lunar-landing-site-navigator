@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.models import (
     AnalysisResult,
@@ -112,3 +112,61 @@ class LunarAnalysisEngine:
             sun=sun,
             earth=earth,
         )
+
+    def analyze_time_series(
+        self,
+        site: Site,
+        start_time: datetime,
+        duration_hours: float = 168.0,
+        step_hours: float = 6.0,
+    ) -> list[AnalysisResult]:
+        """
+        Calculate a real time series of Sun/Earth conditions.
+
+        Every sample is calculated through the same SPICE + LOLA
+        observation pipeline used by analyze(). No interpolation
+        or mock values are introduced.
+        """
+
+        if duration_hours <= 0:
+            raise ValueError(
+                "duration_hours must be greater than zero."
+            )
+
+        if step_hours <= 0:
+            raise ValueError(
+                "step_hours must be greater than zero."
+            )
+
+        results = []
+
+        elapsed_hours = 0.0
+
+        while elapsed_hours <= duration_hours:
+            analysis_time = (
+                start_time
+                + timedelta(hours=elapsed_hours)
+            )
+
+            results.append(
+                self.analyze(
+                    site,
+                    analysis_time,
+                )
+            )
+
+            elapsed_hours += step_hours
+
+        if results[-1].time < (
+            start_time
+            + timedelta(hours=duration_hours)
+        ):
+            results.append(
+                self.analyze(
+                    site,
+                    start_time
+                    + timedelta(hours=duration_hours),
+                )
+            )
+
+        return results

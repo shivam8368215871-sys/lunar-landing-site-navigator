@@ -61,7 +61,9 @@ class MainWindow(QMainWindow):
 
         self.sites_page = SitesPage()
 
-        self.analysis_page = AnalysisPage()
+        self.analysis_page = AnalysisPage(
+            engine=self.dashboard_page.engine
+        )
 
         self.compare_page = ComparePage()
 

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QComboBox,
     QLabel,
+    QGridLayout,
     QSizePolicy,
     QScrollArea,
 )
@@ -104,10 +105,10 @@ class ComparePage(QWidget):
         # -------------------------------------------------
 
         comparison_group = QGroupBox(
-            "Real-Time SPICE Comparison"
+            "Real-Time SPICE + LOLA Comparison"
         )
 
-        comparison_layout = QHBoxLayout(
+        comparison_layout = QVBoxLayout(
             comparison_group
         )
 
@@ -118,27 +119,93 @@ class ComparePage(QWidget):
             12,
         )
 
-        comparison_layout.setSpacing(20)
+        self.comparison_grid = QGridLayout()
+        self.comparison_grid.setHorizontalSpacing(18)
+        self.comparison_grid.setVerticalSpacing(8)
 
-        self.site_a_results = QLabel()
-        self.site_b_results = QLabel()
+        headers = [
+            "Metric",
+            "Site A",
+            "Site B",
+            "Difference",
+        ]
 
-        self._configure_result_label(
-            self.site_a_results
-        )
+        for column, header in enumerate(headers):
+            label = QLabel(header)
+            label.setStyleSheet("""
+                QLabel {
+                    font-weight: bold;
+                    font-size: 14px;
+                    padding: 6px;
+                }
+            """)
+            self.comparison_grid.addWidget(
+                label,
+                0,
+                column,
+            )
 
-        self._configure_result_label(
-            self.site_b_results
-        )
+        self.comparison_rows = {}
 
-        comparison_layout.addWidget(
-            self.site_a_results,
-            1,
-        )
+        metrics = [
+            ("Sun elevation", "sun_elevation"),
+            ("Sun azimuth", "sun_azimuth"),
+            ("Sun terrain horizon", "sun_horizon"),
+            ("Sun visibility", "sun_visibility"),
+            ("Earth elevation", "earth_elevation"),
+            ("Earth azimuth", "earth_azimuth"),
+            ("Earth terrain horizon", "earth_horizon"),
+            ("Earth visibility", "earth_visibility"),
+        ]
 
-        comparison_layout.addWidget(
-            self.site_b_results,
-            1,
+        for row, (title, key) in enumerate(metrics, start=1):
+            metric_label = QLabel(title)
+            metric_label.setStyleSheet(
+                "font-weight: bold; padding: 5px;"
+            )
+
+            site_a_label = QLabel("--")
+            site_b_label = QLabel("--")
+            difference_label = QLabel("--")
+
+            for label in (
+                site_a_label,
+                site_b_label,
+                difference_label,
+            ):
+                label.setStyleSheet(
+                    "padding: 5px;"
+                )
+
+            self.comparison_grid.addWidget(
+                metric_label,
+                row,
+                0,
+            )
+            self.comparison_grid.addWidget(
+                site_a_label,
+                row,
+                1,
+            )
+            self.comparison_grid.addWidget(
+                site_b_label,
+                row,
+                2,
+            )
+            self.comparison_grid.addWidget(
+                difference_label,
+                row,
+                3,
+            )
+
+            self.comparison_rows[key] = (
+                site_a_label,
+                site_b_label,
+                difference_label,
+            )
+
+        comparison_layout.addLayout(
+            self.comparison_grid
         )
 
         main_layout.addWidget(
@@ -193,6 +260,10 @@ class ComparePage(QWidget):
         self.site_b_combo.currentTextChanged.connect(
             self.update_comparison
         )
+
+        # Start with two different sites.
+        if self.site_b_combo.count() > 1:
+            self.site_b_combo.setCurrentIndex(1)
 
         self.update_comparison()
 
@@ -336,16 +407,9 @@ class ComparePage(QWidget):
 
             return
 
-        self.site_a_results.setText(
-            self._format_result(
-                result_a
-            )
-        )
-
-        self.site_b_results.setText(
-            self._format_result(
-                result_b
-            )
+        self._update_comparison_grid(
+            result_a,
+            result_b,
         )
 
         self.time_label.setText(
@@ -367,6 +431,88 @@ class ComparePage(QWidget):
                 f"Comparing {site_a_name} with "
                 f"{site_b_name} using real NASA SPICE data."
             )
+
+    def _update_comparison_grid(
+        self,
+        result_a,
+        result_b,
+    ):
+        """Populate the structured site comparison."""
+
+        def visibility_text(result):
+            return (
+                "Visible"
+                if result.mission_visible
+                else "Blocked by Terrain"
+            )
+
+        def horizon_text(result):
+            if result.terrain_horizon_elevation is None:
+                return "Unavailable"
+            return f"{result.terrain_horizon_elevation:.2f}°"
+
+        rows = {
+            "sun_elevation": (
+                f"{result_a.sun.elevation:.2f}°",
+                f"{result_b.sun.elevation:.2f}°",
+                f"{result_b.sun.elevation - result_a.sun.elevation:+.2f}°",
+            ),
+            "sun_azimuth": (
+                f"{result_a.sun.azimuth:.2f}°",
+                f"{result_b.sun.azimuth:.2f}°",
+                f"{result_b.sun.azimuth - result_a.sun.azimuth:+.2f}°",
+            ),
+            "sun_horizon": (
+                horizon_text(result_a.sun),
+                horizon_text(result_b.sun),
+                (
+                    f"{result_b.sun.terrain_horizon_elevation - result_a.sun.terrain_horizon_elevation:+.2f}°"
+                    if (
+                        result_a.sun.terrain_horizon_elevation is not None
+                        and result_b.sun.terrain_horizon_elevation is not None
+                    )
+                    else "—"
+                ),
+            ),
+            "sun_visibility": (
+                visibility_text(result_a.sun),
+                visibility_text(result_b.sun),
+                "—",
+            ),
+            "earth_elevation": (
+                f"{result_a.earth.elevation:.2f}°",
+                f"{result_b.earth.elevation:.2f}°",
+                f"{result_b.earth.elevation - result_a.earth.elevation:+.2f}°",
+            ),
+            "earth_azimuth": (
+                f"{result_a.earth.azimuth:.2f}°",
+                f"{result_b.earth.azimuth:.2f}°",
+                f"{result_b.earth.azimuth - result_a.earth.azimuth:+.2f}°",
+            ),
+            "earth_horizon": (
+                horizon_text(result_a.earth),
+                horizon_text(result_b.earth),
+                (
+                    f"{result_b.earth.terrain_horizon_elevation - result_a.earth.terrain_horizon_elevation:+.2f}°"
+                    if (
+                        result_a.earth.terrain_horizon_elevation is not None
+                        and result_b.earth.terrain_horizon_elevation is not None
+                    )
+                    else "—"
+                ),
+            ),
+            "earth_visibility": (
+                visibility_text(result_a.earth),
+                visibility_text(result_b.earth),
+                "—",
+            ),
+        }
+
+        for key, values in rows.items():
+            labels = self.comparison_rows[key]
+
+            for label, value in zip(labels, values):
+                label.setText(value)
 
     @staticmethod
     def _format_result(result):

@@ -342,10 +342,10 @@ class MoonGlobeWidget(QWidget):
             [],
             [],
             [],
-            s=180,
+            s=260,
             color="#ff3b30",
             edgecolors="white",
-            linewidths=1.5,
+            linewidths=2.5,
             depthshade=False,
         )
 

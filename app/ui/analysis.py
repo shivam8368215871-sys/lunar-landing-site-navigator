@@ -5,19 +5,34 @@ from PySide6.QtWidgets import (
     QLabel,
     QGroupBox,
     QGridLayout,
+    QScrollArea,
 )
+
+from app.core.models import Site
+from app.ui.time_series_plot import LunarTimeSeriesPlot
 
 
 class AnalysisPage(QWidget):
 
-    def __init__(self):
+    def __init__(self, engine=None):
         super().__init__()
+
+        self.engine = engine
+        self.time_series_plot = None
+        self.timeline_status = None
 
         self.setup_ui()
 
     def setup_ui(self):
 
-        main_layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        content = QWidget()
+        main_layout = QVBoxLayout(content)
 
         # --------------------------------------------------
         # Header
@@ -72,7 +87,7 @@ class AnalysisPage(QWidget):
         )
 
         sun_layout.addWidget(
-            QLabel("Status:"), 2, 0
+            QLabel("Geometric Status:"), 2, 0
         )
 
         self.sun_status = QLabel("--")
@@ -258,7 +273,42 @@ class AnalysisPage(QWidget):
             status_group
         )
 
+        # --------------------------------------------------
+        # Real Mission Timeline
+        # --------------------------------------------------
+
+        timeline_group = QGroupBox(
+            "Real Mission Timeline"
+        )
+
+        timeline_layout = QVBoxLayout()
+
+        self.timeline_status = QLabel(
+            "Run an analysis to calculate the real timeline."
+        )
+
+        timeline_layout.addWidget(
+            self.timeline_status
+        )
+
+        self.time_series_plot = LunarTimeSeriesPlot()
+
+        timeline_layout.addWidget(
+            self.time_series_plot
+        )
+
+        timeline_group.setLayout(
+            timeline_layout
+        )
+
+        main_layout.addWidget(
+            timeline_group
+        )
+
         main_layout.addStretch()
+
+        scroll_area.setWidget(content)
+        outer_layout.addWidget(scroll_area)
 
     # ------------------------------------------------------
     # Display analysis results
@@ -270,11 +320,11 @@ class AnalysisPage(QWidget):
         earth = results["earth"]
 
         self.sun_elevation.setText(
-            f'{sun["elevation"]}°'
+            f'{sun["elevation"]:.2f}°'
         )
 
         self.sun_azimuth.setText(
-            f'{sun["azimuth"]}°'
+            f'{sun["azimuth"]:.2f}°'
         )
 
         self.sun_status.setText(
@@ -282,11 +332,11 @@ class AnalysisPage(QWidget):
         )
 
         self.earth_elevation.setText(
-            f'{earth["elevation"]}°'
+            f'{earth["elevation"]:.2f}°'
         )
 
         self.earth_azimuth.setText(
-            f'{earth["azimuth"]}°'
+            f'{earth["azimuth"]:.2f}°'
         )
 
         self.earth_status.setText(
@@ -303,7 +353,7 @@ class AnalysisPage(QWidget):
             )
         else:
             self.sun_terrain_horizon.setText(
-                f'{sun_horizon:.3f}°'
+                f'{sun_horizon:.2f}°'
             )
 
         sun_terrain_visible = sun.get(
@@ -316,9 +366,9 @@ class AnalysisPage(QWidget):
             )
         else:
             self.sun_terrain_visibility.setText(
-                "Visible"
+                "Terrain Clear"
                 if sun_terrain_visible
-                else "Blocked"
+                else "Terrain Blocked"
             )
 
         earth_horizon = earth.get(
@@ -331,7 +381,7 @@ class AnalysisPage(QWidget):
             )
         else:
             self.earth_terrain_horizon.setText(
-                f'{earth_horizon:.3f}°'
+                f'{earth_horizon:.2f}°'
             )
 
         earth_terrain_visible = earth.get(
@@ -344,9 +394,9 @@ class AnalysisPage(QWidget):
             )
         else:
             self.earth_terrain_visibility.setText(
-                "Visible"
+                "Terrain Clear"
                 if earth_terrain_visible
-                else "Blocked"
+                else "Terrain Blocked"
             )
 
         sun_mission_visible = (
@@ -370,5 +420,46 @@ class AnalysisPage(QWidget):
         )
 
         self.status_label.setText(
-            f'Analysis results loaded for {results["site"]["name"]}.'
+            f'Analysis results loaded for {results["site"]["name"]}. '
+            f'Analysis time: {results["time"].strftime("%Y-%m-%d %H:%M:%S UTC")}.'
+        )
+
+        self.update_time_series(results)
+
+    def update_time_series(self, results):
+        """Calculate and display the real mission timeline."""
+
+        if self.engine is None:
+            self.timeline_status.setText(
+                "Timeline unavailable: analysis engine not connected."
+            )
+            self.time_series_plot.clear()
+            return
+
+        site_data = results["site"]
+
+        site = Site(
+            name=site_data["name"],
+            latitude=site_data["latitude"],
+            longitude=site_data["longitude"],
+        )
+
+        start_time = results["time"]
+
+        series = self.engine.analyze_time_series(
+            site=site,
+            start_time=start_time,
+            duration_hours=168.0,
+            step_hours=6.0,
+        )
+
+        self.time_series_plot.plot(series)
+
+        self.timeline_status.setText(
+            f"Real SPICE + LOLA timeline: "
+            f"{len(series)} samples from "
+            f"{series[0].time.strftime('%Y-%m-%d %H:%M UTC')} "
+            f"to "
+            f"{series[-1].time.strftime('%Y-%m-%d %H:%M UTC')} "
+            f"(6-hour sampling)."
         )
